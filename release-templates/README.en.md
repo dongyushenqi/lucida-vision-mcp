@@ -21,8 +21,9 @@ making "seeing" auditable, verifiable, and honest.
 3. **Lightweight production-grade**: usable by individuals/small teams; enterprise
    features (multi-tenant auth, rate limiting, retention cleanup, distributed
    deployment) are not included;
-4. Fine-grained recognition depends on the connected model; unverified
-   capabilities are honestly reported as "not executable" — never pretended.
+4. Fine-grained recognition depends on the connected model, disclosed honestly
+   after probe verification; **this system presets no default model** — the model
+   is entirely your choice;
 
 ## Platform Support (Important)
 

@@ -17,7 +17,7 @@
 2. **不同于简单 skill**：skill 是"提示词 + 脚本"；本系统是协议级基础设施——标准 MCP 协议、Session/Operation/Observation 领域模型、能力探针、Provenance 审计、幂等与取消契约、SSRF/授权安全边界、schema 版本化、122+ 自动化测试。
 3. **不同于同类视觉 MCP**：能力探针（声明能力 ∩ 实测能力）、每次观察记录模型版本与时间戳（不可变溯源）、服务端取图受 SSRF 与来源策略双重防护、取消绝不销毁已提交证据。
 4. **轻量生产级**：具备个人/小团队可直接投入使用的工程标准（测试、三平台 CI、错误码体系、审计、安全边界、npm/zip/源码三种发布形态）；**尚不包含**企业级能力（多租户认证、并发限流、数据保留期自动清理、分布式部署）——如需再补。
-5. **精细识别**：精细度取决于所接 VLM。当前默认 Agnes（免费模型）已实测支持精细描述与 OCR；结构化检测未通过探针，工具如实报告"不可执行"。
+5. **精细识别**：精细度取决于所接 VLM；**本系统不预设默认模型**——用哪个模型完全由你的接入决定，各家能力经探针验证后如实披露。以当前测试环境接入的 Agnes（免费模型）为例：精细描述与 OCR 已实测通过，结构化检测未通过探针，工具如实报告"不可执行"；换用更强模型后，能力矩阵由探针自动重验。
 
 ## 三种安装方式（重要）
 
@@ -67,7 +67,7 @@ Vision Core                       ← Observation 图谱 / Operation 生命周�
 
 - 语言：TypeScript（NodeNext / ESM）/ 官方 `@modelcontextprotocol/sdk`
 - 存储：SQLite（Node 内置 `node:sqlite`，WAL）
-- 首个 Provider：Agnes `agnes-2.5-flash`（OpenAI 兼容：`https://apihub.agnes-ai.com/v1`，Bearer key）
+- Provider：**不预设默认模型**——任意 OpenAI 兼容视觉模型经配置接入（开发期以 Agnes agnes-2.5-flash 实测验证）
 - 传输：stdio（本地单机）
 
 ## 开发
@@ -93,7 +93,8 @@ VISION_PROVIDERS_JSON='[
 
 各家能力由启动时探针独立验证（Declared ∩ Verified → Effective），
 未验证的能力（如结构化检测）工具会如实报告"不可执行"，绝不撒谎。
-`AGNES_API_KEY` env 为向后兼容的默认 Provider（优先注册）。
+`AGNES_API_KEY` env 仅为向后兼容的快捷配置（追加注册，无优先地位）；
+**本系统不预设默认模型**——用哪个模型由你的配置决定。
 
 **两类分法**（接入规则）：主流协议（OpenAI 兼容）→ 配置即用，见上文；
 非主流协议（Anthropic 原生 / Gemini 原生等）→ 按 `VLMProvider` 接口写一个适配器类，

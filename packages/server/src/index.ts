@@ -28,8 +28,10 @@ import { loadConfig, type ServerConfig } from "./config.js";
 export async function createServer(config: ServerConfig) {
   const store = new SqliteVisionStore(config.dbPath);
 
-  // Provider 装配（模型独立）：OpenAI 兼容生态任意多家并存，Agent 经 provider_id 显式选择；
-  // Agnes 兼容旧配置（AGNES_* env），优先注册为默认。
+  // Provider 装配（模型独立，不预设默认模型）：
+  // - VISION_PROVIDERS_JSON 为用户显式配置，按配置顺序注册（首位即 provider_id 缺省选择）；
+  // - AGNES_API_KEY（AGNES_* env）仅为向后兼容的快捷配置，追加在用户配置之后，无任何优先地位；
+  // - 模型用谁、用什么，完全取决于用户接入；本系统绝不设定默认模型。
   const providers: VLMProvider[] = config.providers.map(
     (p) =>
       new OpenAICompatibleAdapter({
@@ -41,7 +43,7 @@ export async function createServer(config: ServerConfig) {
       }),
   );
   if (config.agnes.apiKey && !providers.some((p) => p.providerId === "agnes")) {
-    providers.unshift(
+    providers.push(
       new AgnesAdapter({
         apiKey: config.agnes.apiKey,
         baseUrl: config.agnes.baseUrl,

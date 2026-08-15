@@ -1,7 +1,9 @@
 /**
- * Agnes 预设 —— OpenAICompatibleAdapter 的一个配置实例（模型独立性的体现）。
+ * Agnes 便捷配置形态 —— OpenAICompatibleAdapter 的一个配置实例。
  *
- * Agnes 是免费视觉 API（OpenAI 兼容端点），作为默认/测试 Provider。
+ * Agnes 是免费视觉 API（OpenAI 兼容端点），作为开发期实测 Provider
+ * （`AGNES_*` env 快捷配置，**非默认模型**——本系统不预设默认模型，
+ * 用哪个模型完全由用户接入决定）。
  * 千问 / 豆包 / GPT 等 OpenAI 兼容厂商各自只需一份配置实例，无需新 Adapter 类；
  * 协议形态不兼容的厂商（Anthropic 原生 / Gemini 原生）才需按 VLMProvider 接口新增 Adapter。
  */

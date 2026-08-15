@@ -38,9 +38,14 @@ capabilities are honestly reported as "not executable".
    security boundaries, npm/zip/source distribution). **Not included**: enterprise
    features (multi-tenant auth, rate limiting, retention cleanup, distributed
    deployment) — added on demand.
-5. **Fine-grained recognition**: precision depends on the connected VLM. The
-   default Agnes (free model) is verified for detailed description and OCR;
-   structured detection fails its probe and is honestly reported as "not executable".
+5. **Fine-grained recognition**: precision depends on the connected VLM;
+   **this system presets no default model** — which model to use is entirely
+   decided by your configuration, and each vendor's capabilities are disclosed
+   honestly after probe verification. For example, with Agnes (free model) in the
+   current test environment: detailed description and OCR passed real probes,
+   while structured detection failed its probe and is honestly reported as
+   "not executable"; switching to a stronger model re-verifies the capability
+   matrix automatically.
 
 ## Installation Options (Important)
 
@@ -93,7 +98,7 @@ protocol-family independence).
 
 - Language: TypeScript (NodeNext / ESM) / official `@modelcontextprotocol/sdk`
 - Storage: SQLite (Node built-in `node:sqlite`, WAL)
-- First provider: Agnes `agnes-2.5-flash` (OpenAI-compatible: `https://apihub.agnes-ai.com/v1`, Bearer key)
+- Provider: **no preset default model** — any OpenAI-compatible vision model can be attached by configuration (Agnes agnes-2.5-flash used for real-API verification during development)
 - Transport: stdio (local single-machine)
 
 ## Development
@@ -122,7 +127,8 @@ VISION_PROVIDERS_JSON='[
 Each vendor's capabilities are verified independently at boot by probes
 (Declared ∩ Verified → Effective); unverified capabilities (e.g. structured
 detection) are honestly reported as "not executable" — the server never pretends.
-`AGNES_API_KEY` env remains the backward-compatible default provider (registered first).
+`AGNES_API_KEY` env is only a backward-compatible shortcut (appended, no priority);
+**this system presets no default model** — your configuration decides.
 
 **Two-class rule** (integration): mainstream protocol (OpenAI-compatible) → config
 only, see above; non-mainstream protocols (Anthropic native / Gemini native, etc.)
