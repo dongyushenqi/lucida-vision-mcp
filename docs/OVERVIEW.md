@@ -1,6 +1,6 @@
 # 项目总览（OVERVIEW）
 
-本文件承接 README 中放不下的深度内容：完整的项目定位声明、架构、包布局、技术决策、测试状态与真实 Provider 测试方法。日常使用请看 [README.md](../README.md)（[English](../README.en.md)）。
+本文件承接 README 中放不下的深度内容：完整的项目定位声明、架构、包布局、技术决策、测试状态与真实 Provider 测试方法。日常使用请看 [README.md](../README.md)（[English](../README.md#english) · [中文](../README.md#chinese)）。
 
 ## 项目定位（诚实声明）
 
