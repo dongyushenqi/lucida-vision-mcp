@@ -31,4 +31,16 @@ describe("重复 providerId 校验（启动即报错）", () => {
     expect(core.providers.all().map((p) => p.providerId)).toEqual(["qwen"]);
     store.close();
   });
+
+  it("装配链路：Declared max_image_size = min(inline, uri) 上限（审查 4 补测）", async () => {
+    const cfg = testConfig({
+      VISION_PROVIDERS_JSON: JSON.stringify([{ providerId: "qwen", apiKey: "k1" }]),
+      VISION_MAX_INLINE_BYTES: "4096",
+      VISION_MAX_URI_BYTES: "2048", // URI 上限更小 → 声明应取 min
+    });
+    const { core, store } = await createServer(cfg);
+    const declared = core.providers.get("qwen").declare();
+    expect(declared.constraints.max_image_size).toBe(2048);
+    store.close();
+  });
 });

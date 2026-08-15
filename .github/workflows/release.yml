@@ -38,8 +38,10 @@ jobs:
         run: git archive --format=zip -o dist/lucida-vision-mcp-source.zip HEAD
       - name: Publish to npm
         # 配置仓库 Secret NPM_TOKEN（npmjs.com 的 Access Token）后自动发布；
-        # 未配置时跳过（发布包 zip 照常产出）
-        if: env.NPM_TOKEN != ''
+        # 未配置时跳过（发布包 zip 照常产出）。
+        # 注意：if 必须用 secrets 上下文判断——步骤级 env 在 if 求值后才注入，
+        # 用 env.NPM_TOKEN 判断在未配 secret 时会求值为 true 导致发布失败（审查 3）。
+        if: ${{ secrets.NPM_TOKEN != '' }}
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |

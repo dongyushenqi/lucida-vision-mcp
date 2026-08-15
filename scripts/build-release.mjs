@@ -29,6 +29,8 @@ mkdirSync(join(releaseDir, "config"), { recursive: true });
 console.log(`[release] bundling server v${version} → single-file mjs ...`);
 await bundleServer(bundleOut);
 
+// LICENSE 在仓库根（对外分发物须带许可证文本，审查 3）
+copyFileSync(join(root, "LICENSE"), join(releaseDir, "LICENSE"));
 const templates = [
   "install.cmd",
   "start.cmd",

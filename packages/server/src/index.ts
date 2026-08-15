@@ -49,8 +49,9 @@ export async function createServer(config: ServerConfig) {
         apiKey: p.apiKey,
         baseUrl: p.baseUrl,
         model: p.model,
-        // Declared 约束与 Server Fetch 上限同步（审查：声明不得写死）
-        maxImageSize: config.maxInlineBytes,
+        // Declared 约束与两个 Fetch 上限对齐（审查：取两者最小值，
+        // 否则 URI 上限小于 inline 时声明偏大，反之 IQA 提前拒绝本可允许的 URI 图）
+        maxImageSize: Math.min(config.maxInlineBytes, config.maxUriBytes),
       }),
   );
   if (config.agnes.apiKey && !providers.some((p) => p.providerId === "agnes")) {
@@ -59,7 +60,7 @@ export async function createServer(config: ServerConfig) {
         apiKey: config.agnes.apiKey,
         baseUrl: config.agnes.baseUrl,
         model: config.agnes.model,
-        maxImageSize: config.maxInlineBytes,
+        maxImageSize: Math.min(config.maxInlineBytes, config.maxUriBytes),
       }),
     );
   }
