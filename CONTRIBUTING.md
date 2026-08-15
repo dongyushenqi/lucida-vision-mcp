@@ -34,7 +34,7 @@ pnpm -r run build
 pnpm -r run test        # 无 key 时真实 API 用例自动跳过
 ```
 
-- 新功能必须有配套单测（当前基线 144+ 测试）；
+- 新功能必须有配套单测（当前基线 154+ 测试）；
 - 涉及真实 Provider 的验证：`AGNES_API_KEY=<key> node packages/server/e2e-real.mjs`；
 - 提交前跑通 build + test。
 

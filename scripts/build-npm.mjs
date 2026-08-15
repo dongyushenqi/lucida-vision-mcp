@@ -38,12 +38,12 @@ const pkgJson = {
   files: ["bin"],
   keywords: ["mcp", "vision", "vlm", "visual", "model-context-protocol", "server", "ocr", "detect"],
   license: "MIT",
-  repository: { type: "git", url: "https://github.com/<your-org>/lucida-vision-mcp.git" },
+  // repository 在真实 GitHub 仓库 URL 确定后由发布前配置补上，不放占位 URL。
   publishConfig: { access: "public" },
 };
 writeFileSync(join(npmDir, "package.json"), JSON.stringify(pkgJson, null, 2) + "\n");
 
-const templates = ["LICENSE"];
+const templates = ["LICENSE", "README.md"];
 for (const t of templates) {
   copyFileSync(join(ROOT, t), join(npmDir, t));
 }

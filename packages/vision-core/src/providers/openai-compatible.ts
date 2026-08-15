@@ -42,6 +42,8 @@ export interface OpenAiCompatibleProviderConfig {
   extraConstraints?: Record<string, unknown>;
   /** 单图最大字节数（Declared constraints.max_image_size；应与 Server Fetch 上限一致） */
   maxImageSize?: number;
+  /** 响应文本最大字节数（防御异常/恶意 Provider 膨胀；超限 → PROVIDER_INVALID_RESPONSE） */
+  maxResponseTextBytes?: number;
 }
 
 /** 1x1 透明 PNG（探针测试图，内容无关）。 */
@@ -75,6 +77,7 @@ export class OpenAICompatibleAdapter implements VLMProvider {
   private readonly fetchImpl: typeof fetch;
   private readonly extraConstraints: Record<string, unknown>;
   private readonly maxImageSize: number;
+  private readonly maxResponseTextBytes: number;
 
   constructor(private readonly config: OpenAiCompatibleProviderConfig) {
     if (!config.providerId || !config.providerId.match(/^[a-z0-9_-]+$/)) {
@@ -90,6 +93,7 @@ export class OpenAICompatibleAdapter implements VLMProvider {
     this.fetchImpl = config.fetchImpl ?? fetch;
     this.extraConstraints = config.extraConstraints ?? {};
     this.maxImageSize = config.maxImageSize ?? 10 * 1024 * 1024;
+    this.maxResponseTextBytes = config.maxResponseTextBytes ?? 1024 * 1024;
   }
 
   /** 声明能力（含 Scope and Constraints）。 */
@@ -207,6 +211,7 @@ export class OpenAICompatibleAdapter implements VLMProvider {
         });
 
         if (res.status === 401 || res.status === 403) {
+          await discardResponseBody(res);
           throw new VisionError(ApplicationErrorCode.PROVIDER_AUTH_FAILED, `${this.providerId} 鉴权失败`, {
             http_status: res.status,
           });
@@ -218,23 +223,41 @@ export class OpenAICompatibleAdapter implements VLMProvider {
           !formatDowngraded &&
           payload["response_format"] !== undefined
         ) {
+          await discardResponseBody(res);
           formatDowngraded = true;
           delete payload["response_format"];
           continue;
         }
         if (RETRYABLE_STATUS.has(res.status) && attempt < this.maxRetries) {
+          // 审查遗漏补正：5xx 重试路径同样释放未消费 body，避免连接泄漏
+          await discardResponseBody(res);
           await delay(500 * (attempt + 1));
           continue;
         }
         if (!res.ok) {
+          await discardResponseBody(res);
           throw new VisionError(ApplicationErrorCode.PROVIDER_UNAVAILABLE, `${this.providerId} HTTP ${res.status}`, {
             http_status: res.status,
           });
         }
-        const data: unknown = await res.json();
+        let data: unknown;
+        try {
+          data = await res.json();
+        } catch {
+          throw new VisionError(
+            ApplicationErrorCode.PROVIDER_INVALID_RESPONSE,
+            `${this.providerId} 返回非合法 JSON`,
+          );
+        }
         const text = extractContent(data);
         if (typeof text !== "string") {
           throw new VisionError(ApplicationErrorCode.PROVIDER_INVALID_RESPONSE, `${this.providerId} 返回结构异常`);
+        }
+        // 响应膨胀防御（外部审查建议）：文本超限 → 事实化错误，不截断（截断会破坏证据完整性）
+        if (Buffer.byteLength(text, "utf8") > this.maxResponseTextBytes) {
+          throw new VisionError(ApplicationErrorCode.PROVIDER_INVALID_RESPONSE, `${this.providerId} 响应文本超过上限`, {
+            max_bytes: this.maxResponseTextBytes,
+          });
         }
         return {
           text,
@@ -296,6 +319,15 @@ function extractContent(data: unknown): unknown {
     return parts.length > 0 ? parts.join("\n") : undefined;
   }
   return undefined;
+}
+
+/** 丢弃未消费的响应体，释放连接；错误/降级路径不得留下未关闭 body。 */
+async function discardResponseBody(res: Response): Promise<void> {
+  try {
+    await res.body?.cancel();
+  } catch {
+    // 释放失败不影响业务错误分类
+  }
 }
 
 function isBboxJson(text: string): boolean {

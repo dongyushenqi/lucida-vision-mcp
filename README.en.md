@@ -28,7 +28,7 @@ capabilities are honestly reported as "not executable".
 2. **Not a simple skill**: skills are "prompts + scripts"; this is protocol-level
    infrastructure — standard MCP protocol, Session/Operation/Observation domain
    model, capability probes, Provenance audit, idempotency & cancellation
-   contracts, SSRF/authorization security boundaries, schema versioning, 122+
+    contracts, SSRF/authorization security boundaries, schema versioning, 154+
    automated tests.
 3. **Different from typical vision MCPs**: capability probes (declared ∩ verified),
    per-observation immutable provenance (model version + timestamp), server-side
@@ -138,12 +138,12 @@ only, see above; non-mainstream protocols (Anthropic native / Gemini native, etc
 
 ## Status
 
-- [x] M0 contracts (domain contracts) 31 tests
-- [x] M1 vision-core (graph/Operation/Fetch Boundary/IQA/Provider adapters) 56 tests
-- [x] M2 vision-interface (8 tools + idempotency + sandbox) 19 tests
-- [x] M3 compatibility + server (Legacy Family + stdio + release package) 16 tests
+- [x] M0 contracts (domain contracts) 33 tests
+- [x] M1 vision-core (graph/Operation/Fetch Boundary/IQA/Provider adapters) 72 tests
+- [x] M2 vision-interface (8 tools + idempotency + sandbox) 28 tests
+- [x] M3 compatibility + server (Legacy Family + stdio + release package) 21 tests
 - [x] M4 E2E smoke acceptance (InMemoryTransport protocol-level + stdio real subprocess + release bundle handshake)
-- 122 tests green (`pnpm test`); CI runs on Windows / macOS / Linux automatically
+- 154 tests green (`pnpm test`); CI runs on Windows / macOS / Linux automatically
 
 ## Real-Provider Testing (requires an API key; keys are never committed)
 

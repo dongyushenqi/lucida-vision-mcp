@@ -245,4 +245,17 @@ describe("OpenAICompatibleAdapter：多厂商通用性", () => {
       adapter.execute({ images: [], instruction: "x", jsonMode: false }, ac.signal),
     ).rejects.toMatchObject({ name: "AbortError" });
   });
+
+  it("响应文本超限 → PROVIDER_INVALID_RESPONSE（膨胀防御，不截断）", async () => {
+    const fetchImpl = vi.fn(async () => okResponse("x".repeat(2000)));
+    const adapter = makeAdapter(
+      { maxResponseTextBytes: 1000 },
+      fetchImpl as unknown as typeof fetch,
+    );
+    await expect(
+      adapter.execute({ images: [], instruction: "x", jsonMode: false }, new AbortController().signal),
+    ).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.PROVIDER_INVALID_RESPONSE,
+    });
+  });
 });

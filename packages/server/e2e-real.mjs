@@ -4,8 +4,9 @@
  * 运行：cd packages/server && AGNES_API_KEY=<key> node e2e-real.mjs
  * 选项：--skip-probe 跳过启动探针（省 3 次调用；免费层频率保护）。
  *   注意：无探针时无已验证能力，本模式只验证"能力门禁如实报告"路径
- *   （executable:false + 理由），完整执行链路断言需要探针开启（默认）。
- * 安全约定：key 只经环境变量注入，绝不写盘/入库；无 key 时脚本直接退出。
+ *   （executable:false + 理由），完整执行链路断言需要探针开启（默认）；
+ *   该模式不调用 Provider API，允许无 AGNES_API_KEY 运行（服务端注入假 key 仅用于装配）。
+ * 安全约定：key 只经环境变量注入，绝不写盘/入库；完整执行模式无 key 时脚本直接退出。
  * 免费层注意：默认每次运行 ≈ 7 次 API 调用（probe 3 + 执行 4），请控制频率。
  */
 import { fileURLToPath } from "node:url";
@@ -13,13 +14,12 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { makeDetectImage } from "./e2e/png-utils.mjs";
 
+const skipProbe = process.argv.includes("--skip-probe");
 const key = process.env.AGNES_API_KEY;
-if (!key) {
-  console.error("[e2e-real] 需要 AGNES_API_KEY 环境变量（仅测试用，不落盘）");
+if (!skipProbe && !key) {
+  console.error("[e2e-real] 完整执行模式需要 AGNES_API_KEY 环境变量（仅测试用，不落盘）");
   process.exit(2);
 }
-
-const skipProbe = process.argv.includes("--skip-probe");
 
 // 绝对路径（审查 #3）：不依赖调用方 cwd
 const serverEntry = fileURLToPath(new URL("./lib/index.js", import.meta.url));
@@ -40,6 +40,7 @@ const transport = new StdioClientTransport({
   env: {
     ...process.env,
     VISION_PROBE_ON_BOOT: skipProbe ? "false" : "true",
+    ...(skipProbe && !key ? { AGNES_API_KEY: "sk-test" } : {}),
   },
 });
 const client = new Client({ name: "e2e-real", version: "0.0.1" });

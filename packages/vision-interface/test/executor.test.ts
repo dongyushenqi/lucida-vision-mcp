@@ -633,6 +633,24 @@ describe("结构化结果契约校验（审查 #6）", () => {
     expect(s.observations[2]!.location.type).toBe("full_image"); // 非法 bbox → 降级
     expect(s.observations[2]!.limitations).toContain("confidence_not_provided_by_provider");
   });
+
+  it("结构化对象超限 → 截断并如实标记 too_many_objects（膨胀防御）", async () => {
+    const objects = Array.from({ length: 1200 }, (_, i) => ({
+      label: `obj_${i}`,
+      bbox: [0, 0, 0, 0],
+    }));
+    const { executor, sessionId } = await makeEnv({
+      verified: ["image_understanding", "structured_detection"],
+      text: JSON.stringify({ objects }),
+    });
+    const r = await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { json_mode: true }));
+    const s = r.result.structured as {
+      observations: unknown[];
+      limitations?: string[];
+    };
+    expect(s.observations.length).toBe(500); // 默认上限
+    expect(s.limitations).toContain("too_many_objects");
+  });
 });
 
 describe("operation.get / operation.cancel", () => {

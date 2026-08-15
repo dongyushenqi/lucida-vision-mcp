@@ -181,6 +181,7 @@ export class FetchBoundary {
             uri: current.href,
           });
         }
+        await discardResponseBody(res);
         redirects += 1;
         if (redirects > this.config.maxRedirects) {
           throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, "重定向次数超限", {
@@ -203,12 +204,14 @@ export class FetchBoundary {
 
       if (res.status === 401 || res.status === 403) {
         // URI 授权边界：能够访问 ≠ 获得授权；事实陈述，无建议
+        await discardResponseBody(res);
         throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, "URI 访问被拒绝", {
           uri: current.href,
           http_status: res.status,
         });
       }
       if (!res.ok) {
+        await discardResponseBody(res);
         throw new VisionError(ApplicationErrorCode.RESOURCE_NOT_FOUND, "URI 资源不可获取", {
           uri: current.href,
           http_status: res.status,
@@ -316,6 +319,15 @@ function validatePayload(
     contentLength: bytes.byteLength,
     source,
   };
+}
+
+/** 丢弃未消费的响应体，释放连接；错误路径不得留下未关闭 body。 */
+async function discardResponseBody(res: Response): Promise<void> {
+  try {
+    await res.body?.cancel();
+  } catch {
+    // 释放失败不影响业务错误分类
+  }
 }
 
 async function readBodyCapped(

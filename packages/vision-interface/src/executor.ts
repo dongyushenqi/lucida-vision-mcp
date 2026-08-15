@@ -90,6 +90,8 @@ export class VisionExecutor {
   private readonly defaultProviderId: string;
   /** in-flight 取消映射（审查 #1）：operation_id → 执行中的 CancellationTokenSource */
   private readonly inflight = new Map<string, CancellationTokenSource>();
+  /** 本请求结构化解析是否发生截断（膨胀防御，随 summary 输出后复位） */
+  private lastStructuredTruncated = false;
 
   constructor(
     private readonly core: VisionCore,
@@ -290,7 +292,9 @@ export class VisionExecutor {
       const summary = {
         observations: committed.map(summarizeObservation),
         provider: provider.providerId,
+        ...(this.lastStructuredTruncated ? { limitations: ["too_many_objects"] } : {}),
       };
+      this.lastStructuredTruncated = false;
       const finished = this.core.operations.finish(sessionId, operationId, {
         status: "completed",
         result: summary,
@@ -506,7 +510,9 @@ export class VisionExecutor {
         allowedLabels: kind === "detect" ? args.labels : undefined,
       });
       if (structured) {
-        return structured.map((o) => {
+        // 膨胀防御（外部审查建议）：超限截断如实标记，不静默吞
+        this.lastStructuredTruncated = structured.truncated;
+        return structured.objects.map((o) => {
           const limitations = [
             ...(o.confidenceInvalid
               ? ["confidence_invalid"]
@@ -623,16 +629,28 @@ interface StructuredParseOptions {
   height: number;
   /** detect：仅接受 Agent 声明的 label（机械白名单，不做语义解释） */
   allowedLabels?: string[];
+  /** 结构化对象数量上限（膨胀防御；超限截断并标记 truncated） */
+  maxObjects?: number;
 }
+
+interface StructuredParseResult {
+  objects: StructuredObject[];
+  /** 因超过 maxObjects 被截断（如实标记，不静默吞） */
+  truncated: boolean;
+}
+
+const DEFAULT_MAX_STRUCTURED_OBJECTS = 500;
 
 function parseStructuredObservations(
   text: string,
   opts: StructuredParseOptions,
-): StructuredObject[] | undefined {
+): StructuredParseResult | undefined {
   try {
     const parsed = JSON.parse(text) as { objects?: unknown };
     if (!Array.isArray(parsed.objects)) return undefined;
     const objects: StructuredObject[] = [];
+    const maxObjects = opts.maxObjects ?? DEFAULT_MAX_STRUCTURED_OBJECTS;
+    let truncated = false;
     for (const o of parsed.objects) {
       if (typeof o !== "object" || o === null) continue;
       const rec = o as Record<string, unknown>;
@@ -666,10 +684,15 @@ function parseStructuredObservations(
         }
       }
       if (typeof rec.text === "string") item.text = rec.text;
+      if (objects.length >= maxObjects) {
+        truncated = true;
+        continue;
+      }
       objects.push(item);
     }
-    // 空数组是合法“未发现对象”结果；非空但全部不合格才是解析失败。
-    return objects.length > 0 || parsed.objects.length === 0 ? objects : undefined;
+    // 空数组是合法"未发现对象"结果；非空但全部不合格才是解析失败。
+    if (objects.length === 0 && parsed.objects.length > 0) return undefined;
+    return { objects, truncated };
   } catch {
     return undefined;
   }
