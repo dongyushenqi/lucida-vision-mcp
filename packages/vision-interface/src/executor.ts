@@ -29,6 +29,7 @@ import {
   type VLMProvider,
   type VisionCore,
 } from "@mcp-vision/vision-core";
+import { assessImage } from "@mcp-vision/vision-core";
 import { z } from "zod";
 import {
   DetectArgs,
@@ -250,8 +251,8 @@ export class VisionExecutor {
         : kind === "ocr" ? ["ocr"]
         : ["structured_detection"];
 
-      // 能力门禁：Final Executable Capability 仅描述可行性（非决策属性约束）
-      const assessment = this.executability(provider, required);
+      // 能力门禁：Final Executable = Effective ∩ IQA（仅描述可行性；IQA 结果不进图谱）
+      const assessment = this.executability(provider, required, image);
       if (!assessment.executable) {
         const finished = this.core.operations.finish(sessionId, operationId, {
           status: "completed",
@@ -373,14 +374,26 @@ export class VisionExecutor {
         source: imageInput.resource_ref,
       };
     }
-    return this.core.fetchBoundary.resolve(imageInput, signal);
+    // URI 授权边界：Fetch Boundary 依 Principal/Tenant + 资源来源策略判断可否获取
+    return this.core.fetchBoundary.resolve(
+      imageInput,
+      signal,
+      { principalId: identity.principalId, tenantId: identity.tenantId },
+    );
   }
 
-  /** Final Executable Capability 评估：只陈述可行性事实（无任何建议字段）。 */
+  /** Final Executable Capability 评估：Effective ∩ IQA，只陈述可行性事实（无任何建议字段）。 */
   private executability(
     provider: VLMProvider,
     required: CapabilityId[],
-  ): { executable: boolean; reasons: string[]; provider: string; constraints: unknown } {
+    image?: FetchedImage,
+  ): {
+    executable: boolean;
+    reasons: string[];
+    provider: string;
+    constraints: unknown;
+    iqa?: unknown;
+  } {
     const effective = this.core.capabilities.effective(provider.providerId);
     const constraints = effective?.constraints ?? provider.declare().constraints;
     if (!effective) {
@@ -400,7 +413,19 @@ export class VisionExecutor {
         constraints,
       };
     }
-    return { executable: true, reasons: [], provider: provider.providerId, constraints };
+    // IQA Capability Assessment：默认属于 Execution Metadata（IQA Result Semantics 封口），
+    // 代码路径上只进评估结果，绝不进入 Observation Graph。
+    const iqa = image ? assessImage(image.bytes, image.mimeType, constraints) : undefined;
+    if (iqa && !iqa.executable) {
+      return {
+        executable: false,
+        reasons: iqa.reasons.map((r) => `IQA: ${r}`),
+        provider: provider.providerId,
+        constraints,
+        iqa,
+      };
+    }
+    return { executable: true, reasons: [], provider: provider.providerId, constraints, iqa };
   }
 
   private buildInstruction(kind: VisualKind, args: VisualArgs): string {

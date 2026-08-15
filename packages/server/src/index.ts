@@ -14,6 +14,7 @@ import { pathToFileURL } from "node:url";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   AgnesAdapter,
+  DEFAULT_FETCH_BOUNDARY_CONFIG,
   FetchBoundary,
   SqliteVisionStore,
   VisionCore,
@@ -33,7 +34,12 @@ export async function createServer(config: ServerConfig) {
 
   const core = new VisionCore({
     store,
-    fetchBoundary: new FetchBoundary(),
+    fetchBoundary: new FetchBoundary({
+      ...DEFAULT_FETCH_BOUNDARY_CONFIG,
+      ...(config.allowedUriOrigins.length > 0
+        ? { uriPolicy: { allowedOrigins: config.allowedUriOrigins } }
+        : {}),
+    }),
     providers: [agnes],
   });
   core.capabilities.register(agnes.declare());

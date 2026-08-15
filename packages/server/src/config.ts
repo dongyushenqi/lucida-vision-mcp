@@ -15,6 +15,8 @@ export interface ServerConfig {
   probeOnBoot: boolean;
   /** 探针总超时（ms） */
   probeTimeoutMs: number;
+  /** URI 授权边界：允许的图像来源域名（空 = 仅 SSRF 防护，规格四.1） */
+  allowedUriOrigins: string[];
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): ServerConfig {
@@ -31,5 +33,9 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     },
     probeOnBoot: env["VISION_PROBE_ON_BOOT"] !== "false",
     probeTimeoutMs: 60_000,
+    allowedUriOrigins: (env["VISION_ALLOWED_URI_ORIGINS"] ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0),
   };
 }

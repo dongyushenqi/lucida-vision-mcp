@@ -289,6 +289,67 @@ describe("取消契约（规格二.2）", () => {
   });
 });
 
+describe("IQA 能力评估（规格三.2：Final Executable = Effective ∩ IQA）", () => {
+  /** 16x16 黑色 BMP（inline 合法，但长边超 max_dimension=8 约束） */
+  function makeBmp(width: number, height: number): string {
+    const rowSize = Math.ceil((width * 3) / 4) * 4;
+    const buf = Buffer.alloc(14 + 40 + rowSize * height);
+    buf.write("BM", 0, "ascii");
+    buf.writeUInt32LE(54 + rowSize * height, 2);
+    buf.writeUInt32LE(54, 10);
+    buf.writeUInt32LE(40, 14);
+    buf.writeInt32LE(width, 18);
+    buf.writeInt32LE(height, 22);
+    buf.writeUInt16LE(1, 26);
+    buf.writeUInt16LE(24, 28);
+    return buf.toString("base64");
+  }
+
+  it("图像长边超 Provider 约束 → 不可执行评估（事实，无建议）；IQA 不进图谱", async () => {
+    const provider = new MockProvider({
+      declared: {
+        provider: "mock",
+        capabilities: ["image_understanding"],
+        constraints: { max_dimension: 8 },
+      },
+      verified: ["image_understanding"],
+    });
+    const core = new VisionCore({
+      store: new InMemoryVisionStore(),
+      fetchBoundary: new FetchBoundary(),
+      providers: [provider],
+    });
+    core.capabilities.register(provider.declare());
+    core.capabilities.verify(await provider.probe());
+    const executor = new VisionExecutor(core);
+    const createRes = await executor.execute({
+      toolName: "vision.session.create",
+      args: {},
+      identity: IDENTITY,
+      cancel: new CancellationTokenSource(),
+    });
+    const sessionId = (createRes.result.structured as { vision_session_id: string }).vision_session_id;
+
+    const r = await call(executor, "vision.observe", {
+      vision_session_id: sessionId,
+      image_input: {
+        type: "inline",
+        inline: { mime_type: "image/bmp", blob: makeBmp(16, 16) },
+      },
+    });
+    expect(r.result.isError).toBe(false);
+    const s = r.result.structured as {
+      executability: { executable: boolean; reasons: string[]; iqa?: { width: number } };
+    };
+    expect(s.executability.executable).toBe(false);
+    expect(s.executability.reasons[0]).toMatch(/IQA: dimension_exceeds/);
+    expect(s.executability.iqa).toMatchObject({ width: 16, height: 16 });
+    // IQA 只进 Execution Metadata：图谱与 Operation 结果都无 Observation
+    expect(r.operation!.committed_observation_ids).toEqual([]);
+    expect(core.graph.list(sessionId)).toEqual([]);
+  });
+});
+
 describe("resource_ref 授权（规格四.1）", () => {
   it("跨 Session resource_ref → RESOURCE_AUTHORIZATION_DENIED", async () => {
     const { executor, sessionId, core } = await makeEnv({ verified: ["image_understanding"] });

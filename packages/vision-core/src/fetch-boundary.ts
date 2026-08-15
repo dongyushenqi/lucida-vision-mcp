@@ -27,6 +27,38 @@ export interface FetchBoundaryConfig {
   maxRedirects: number;
   /** 允许的 URI scheme */
   allowedSchemes: string[];
+  /**
+   * URI 授权边界策略（规格四.1）：
+   * SSRF 防护仅解决网络访问安全，不得被视为资源授权机制——
+   * 资源可否获取须依 Principal/Tenant 与允许的资源来源策略判定。
+   */
+  uriPolicy?: UriAuthorizationPolicy;
+}
+
+/**
+ * 资源来源策略：域名白名单 + 可选授权钩子。
+ * - allowedOrigins 空数组 = 无来源限制（仅 SSRF 防护）；
+ * - 匹配规则：精确 host 或子域（"example.com" 匹配 example.com / a.example.com）。
+ */
+export interface UriAuthorizationPolicy {
+  allowedOrigins?: string[];
+  /** 自定义授权钩子：返回 false → SECURITY_URI_DENIED（只陈述事实） */
+  authorize?: (uri: URL, ctx: { principalId: string; tenantId: string }) => boolean;
+}
+
+export interface UriAuthContext {
+  principalId: string;
+  tenantId: string;
+}
+
+/** host 是否命中允许来源（精确或子域后缀）。 */
+export function isOriginAllowed(hostname: string, allowedOrigins: string[]): boolean {
+  const host = hostname.toLowerCase().replace(/\.$/, "");
+  return allowedOrigins.some((origin) => {
+    const o = origin.toLowerCase().replace(/\.$/, "");
+    if (o === "") return false;
+    return host === o || host.endsWith(`.${o}`);
+  });
 }
 
 export const DEFAULT_FETCH_BOUNDARY_CONFIG: FetchBoundaryConfig = {
@@ -59,10 +91,14 @@ export class FetchBoundary {
   }
 
   /** 按输入模式解析为本地字节；resource_ref 不属于本边界（由接口层授权后从存储 dereference）。 */
-  async resolve(input: ImageInput, signal?: AbortSignal): Promise<FetchedImage> {
+  async resolve(
+    input: ImageInput,
+    signal?: AbortSignal,
+    authCtx?: UriAuthContext,
+  ): Promise<FetchedImage> {
     switch (input.type) {
       case "uri":
-        return this.resolveUri(input.uri, signal);
+        return this.resolveUri(input.uri, signal, authCtx);
       case "inline":
         return this.validateInline(input.inline.mime_type, input.inline.blob);
       case "resource_ref":
@@ -74,8 +110,8 @@ export class FetchBoundary {
     }
   }
 
-  /** URI 模式：scheme 白名单 → 门禁连接 → 重定向校验 → 大小限制 → MIME sniff。 */
-  async resolveUri(uri: string, signal?: AbortSignal): Promise<FetchedImage> {
+  /** URI 模式：scheme 白名单 → 授权策略 → 门禁连接 → 重定向校验 → 大小限制 → MIME sniff。 */
+  async resolveUri(uri: string, signal?: AbortSignal, authCtx?: UriAuthContext): Promise<FetchedImage> {
     const u = new URL(uri);
     const scheme = u.protocol.replace(":", "");
     if (!this.config.allowedSchemes.includes(scheme)) {
@@ -84,6 +120,8 @@ export class FetchBoundary {
         uri,
       });
     }
+    // URI 授权边界：依 Principal/Tenant + 资源来源策略判定（SSRF ≠ 授权）
+    this.authorizeUri(u, authCtx);
 
     let current = u;
     let redirects = 0;
@@ -136,6 +174,8 @@ export class FetchBoundary {
             { scheme: current.protocol, uri: current.href },
           );
         }
+        // 重定向目标同样过授权策略（防白名单绕过）
+        this.authorizeUri(current, authCtx);
         continue;
       }
 
@@ -156,6 +196,27 @@ export class FetchBoundary {
       const bytes = await readBodyCapped(res.body, this.config.maxUriBytes, signal);
       const declared = normalizeMimeType(res.headers.get("content-type") ?? "");
       return validatePayload(bytes, declared, current.href);
+    }
+  }
+
+  /** URI 授权边界：来源策略 + 授权钩子；SSRF 防护 ≠ 资源授权（规格四.1）。 */
+  private authorizeUri(u: URL, authCtx?: UriAuthContext): void {
+    const policy = this.config.uriPolicy;
+    if (!policy) return;
+    const denied = (reason: string) => {
+      throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, "URI 不在允许的资源来源范围内", {
+        uri: u.href,
+        reason,
+      });
+    };
+    if (policy.allowedOrigins && policy.allowedOrigins.length > 0) {
+      if (!isOriginAllowed(u.hostname, policy.allowedOrigins)) {
+        denied(`origin_not_allowed`);
+      }
+    }
+    if (policy.authorize) {
+      const ok = policy.authorize(u, authCtx ?? { principalId: "", tenantId: "" });
+      if (!ok) denied(`authorization_denied`);
     }
   }
 

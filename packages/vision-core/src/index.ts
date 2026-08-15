@@ -8,6 +8,7 @@ export * from "./artifacts.js";
 export * from "./session-service.js";
 export * from "./capability-registry.js";
 export * from "./mime.js";
+export * from "./iqa.js";
 export * from "./net-address.js";
 export * from "./fetch-boundary.js";
 export * from "./provider.js";

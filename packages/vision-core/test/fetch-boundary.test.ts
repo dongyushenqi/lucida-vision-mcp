@@ -3,6 +3,7 @@ import { ApplicationErrorCode } from "@mcp-vision/contracts";
 import {
   DEFAULT_FETCH_BOUNDARY_CONFIG as DEFAULT,
   FetchBoundary,
+  isOriginAllowed,
 } from "../src/fetch-boundary.js";
 import { isBlockedAddress } from "../src/net-address.js";
 import { normalizeMimeType, sniffMimeType } from "../src/mime.js";
@@ -104,5 +105,55 @@ describe("FetchBoundary inline 校验（规格四.1）", () => {
     ).rejects.toMatchObject({
       applicationErrorCode: ApplicationErrorCode.RESOURCE_NOT_FOUND,
     });
+  });
+});
+
+describe("URI 授权边界（规格四.1：SSRF ≠ 资源授权）", () => {
+  it("isOriginAllowed：精确 host 与子域匹配", () => {
+    expect(isOriginAllowed("example.com", ["example.com"])).toBe(true);
+    expect(isOriginAllowed("a.example.com", ["example.com"])).toBe(true);
+    expect(isOriginAllowed("notexample.com", ["example.com"])).toBe(false);
+    expect(isOriginAllowed("example.com.evil.net", ["example.com"])).toBe(false);
+    expect(isOriginAllowed("example.com", [])).toBe(false);
+  });
+
+  it("来源不在白名单 → SECURITY_URI_DENIED（策略检查在发请求前，零网络）", async () => {
+    const boundary = new FetchBoundary({
+      ...DEFAULT,
+      uriPolicy: { allowedOrigins: ["allowed.example.com"] },
+    });
+    await expect(
+      boundary.resolve(
+        { type: "uri", uri: "https://evil.example.net/x.png" },
+        undefined,
+        { principalId: "p1", tenantId: "t1" },
+      ),
+    ).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.SECURITY_URI_DENIED,
+    });
+  });
+
+  it("自定义授权钩子拒绝 → SECURITY_URI_DENIED", async () => {
+    const boundary = new FetchBoundary({
+      ...DEFAULT,
+      uriPolicy: {
+        authorize: (uri, ctx) => uri.hostname === "ok.example.com" && ctx.principalId === "p1",
+      },
+    });
+    await expect(
+      boundary.resolve(
+        { type: "uri", uri: "https://ok.example.com/x.png" },
+        undefined,
+        { principalId: "p2", tenantId: "t1" },
+      ),
+    ).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.SECURITY_URI_DENIED,
+    });
+  });
+
+  it("无策略 → 不拦截（仅 SSRF 防护生效）", () => {
+    const boundary = new FetchBoundary();
+    // 策略缺失时私有地址仍被门禁阻断（SSRF 防护独立于授权策略）
+    expect(() => boundary["authorizeUri"](new URL("https://example.com/x.png"), undefined)).not.toThrow();
   });
 });

@@ -35,6 +35,10 @@ Frozen Contract 不可在此变更；新问题必须归类为五类之一：
 | confidence 缺失 | Provider（如 Agnes）不提供置信度时，`confidence.value = null`，`limitations` 注明 `confidence_not_provided_by_provider`；字段存在性满足规格"必须包含" |
 | model_version | Provider 无官方版本号时记录其实际模型标识（如 `agnes-2.5-flash`），属"实际执行来源"如实记录，永不漂移 |
 | OperationRecord.result | Operation 执行结果（含失败错误信息）承载于可选字段 `result`/`error`，仅作状态暴露实现，不影响身份字段不可变性 |
+| Artifact 生产者 | V1 工具全部输出文本证据，无二进制产物生产者；Tier 1/2 机制（存储/读取/URI 模板）在位，待有产物工具（如 mask/裁剪）时启用 |
+| label 语义边界防线 | Server 不做领域语义解释（感知边界）；detect 的 label 白名单由 Agent 声明，json_mode 的 label 来自模型输出——语义合规靠工具契约保证，运行时不过滤 |
+| 坐标系 | V1 仅 `image_px`（规格 Future Extensions 允许视频/点云扩展） |
+| IQA 实现范围 | `max_image_size`（字节）与 `max_dimension`（长边像素）约束 + 可解码性/尺寸解析（PNG/GIF/BMP/JPEG）；结果只进 ExecutabilityAssessment（Execution Metadata），绝不进图谱 |
 
 ## Protocol Adapter Issues（规格三类：Host 兼容性微调，不影响 Vision Core）
 
