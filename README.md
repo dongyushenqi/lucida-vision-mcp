@@ -1,10 +1,14 @@
 # lucida-vision-mcp
 
+> **lucida-vision-mcp** — 通用视觉感知 MCP 服务器（眼睛不是大脑：只陈述视觉事实，不做诊断与决策）
+> **lucida-vision-mcp** — a general-purpose visual perception MCP server (eyes, not brain: states visual facts, never diagnoses or decides)
+>
+> 中文：[README.md](README.md) · English: [README.en.md](README.en.md)
+
 **Lucida**（拉丁语：明亮）—— 清澈地看见。
 **vision-mcp**：视觉感知类 MCP 的约定俗成归类后缀。
 
 通用视觉感知基础设施 —— **眼睛不是大脑**：只陈述视觉事实与局限，绝不输出领域诊断、行动建议或工作流编排。
-(English: [README.en.md](README.en.md))
 
 ## 项目定位（诚实声明）
 
