@@ -16,8 +16,10 @@ import {
   AgnesAdapter,
   DEFAULT_FETCH_BOUNDARY_CONFIG,
   FetchBoundary,
+  OpenAICompatibleAdapter,
   SqliteVisionStore,
   VisionCore,
+  type VLMProvider,
 } from "@mcp-vision/vision-core";
 import { createVisionTools, VisionExecutor } from "@mcp-vision/vision-interface";
 import { LegacyFamilyServer } from "@mcp-vision/compatibility";
@@ -26,11 +28,27 @@ import { loadConfig, type ServerConfig } from "./config.js";
 export async function createServer(config: ServerConfig) {
   const store = new SqliteVisionStore(config.dbPath);
 
-  const agnes = new AgnesAdapter({
-    apiKey: config.agnes.apiKey,
-    baseUrl: config.agnes.baseUrl,
-    model: config.agnes.model,
-  });
+  // Provider 装配（模型独立）：OpenAI 兼容生态任意多家并存，Agent 经 provider_id 显式选择；
+  // Agnes 兼容旧配置（AGNES_* env），优先注册为默认。
+  const providers: VLMProvider[] = config.providers.map(
+    (p) =>
+      new OpenAICompatibleAdapter({
+        providerId: p.providerId,
+        displayName: p.displayName,
+        apiKey: p.apiKey,
+        baseUrl: p.baseUrl,
+        model: p.model,
+      }),
+  );
+  if (config.agnes.apiKey && !providers.some((p) => p.providerId === "agnes")) {
+    providers.unshift(
+      new AgnesAdapter({
+        apiKey: config.agnes.apiKey,
+        baseUrl: config.agnes.baseUrl,
+        model: config.agnes.model,
+      }),
+    );
+  }
 
   const core = new VisionCore({
     store,
@@ -40,24 +58,31 @@ export async function createServer(config: ServerConfig) {
         ? { uriPolicy: { allowedOrigins: config.allowedUriOrigins } }
         : {}),
     }),
-    providers: [agnes],
+    providers,
   });
-  core.capabilities.register(agnes.declare());
+  for (const provider of providers) {
+    core.capabilities.register(provider.declare());
+  }
 
-  if (config.agnes.apiKey && config.probeOnBoot) {
-    // Probe 副作用边界：结果仅更新 Capability Registry，绝不产生 Observation（规格三.2）
-    try {
-      const verified = await agnes.probe(AbortSignal.timeout(config.probeTimeoutMs));
-      core.capabilities.verify(verified);
-      process.stderr.write(
-        `[mcp-vision] probe ok: verified=${verified.capabilities.join(",") || "(none)"}\n`,
-      );
-    } catch {
-      process.stderr.write("[mcp-vision] probe failed（Provider 保持未验证，工具将如实报告不可执行）\n");
+  if (config.probeOnBoot) {
+    for (const provider of providers) {
+      // Probe 副作用边界：结果仅更新 Capability Registry，绝不产生 Observation（规格三.2）
+      try {
+        const verified = await provider.probe(AbortSignal.timeout(config.probeTimeoutMs));
+        core.capabilities.verify(verified);
+        process.stderr.write(
+          `[mcp-vision] probe ok: provider=${provider.providerId} verified=${verified.capabilities.join(",") || "(none)"}\n`,
+        );
+      } catch {
+        process.stderr.write(
+          `[mcp-vision] probe failed: provider=${provider.providerId}（保持未验证，工具将如实报告不可执行）\n`,
+        );
+      }
     }
-  } else if (!config.agnes.apiKey) {
+  }
+  if (providers.length === 0) {
     process.stderr.write(
-      "[mcp-vision] WARN: AGNES_API_KEY 未配置；视觉工具将报告 provider 不可执行\n",
+      "[mcp-vision] WARN: 未配置任何 Provider（AGNES_API_KEY 或 VISION_PROVIDERS_JSON）；视觉工具将报告 provider 不可执行\n",
     );
   }
 

@@ -42,6 +42,24 @@ pnpm build
 pnpm test
 ```
 
+## 多 Provider 配置（模型独立）
+
+任何 OpenAI 兼容视觉模型都可直接接入，每家 = 一份配置实例（`VISION_PROVIDERS_JSON`），
+Agent 经工具参数 `provider_id` 显式选择执行者（服务端绝无自动路由/故障转移）：
+
+```bash
+VISION_PROVIDERS_JSON='[
+  {"providerId":"qwen","apiKey":"<key>","baseUrl":"https://dashscope.aliyuncs.com/compatible-mode/v1","model":"qwen-vl-max","displayName":"通义千问"},
+  {"providerId":"doubao","apiKey":"<key>","baseUrl":"https://ark.cn-beijing.volces.com/api/v3","model":"doubao-1.5-vision-pro","displayName":"豆包"},
+  {"providerId":"gpt","apiKey":"<key>","baseUrl":"https://api.openai.com/v1","model":"gpt-4o","displayName":"GPT"}
+]' node lib/index.js
+```
+
+各家能力由启动时探针独立验证（Declared ∩ Verified → Effective），
+未验证的能力（如结构化检测）工具会如实报告"不可执行"，绝不撒谎。
+`AGNES_API_KEY` env 为向后兼容的默认 Provider（优先注册）。
+协议形态不兼容的厂商（Anthropic 原生 / Gemini 原生 API）按 `VLMProvider` 接口新增 Adapter 类即可，架构不变。
+
 ## 状态
 
 - [x] M0 contracts（领域契约）31 测试

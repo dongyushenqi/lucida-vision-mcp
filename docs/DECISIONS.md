@@ -8,6 +8,8 @@ Frozen Contract 不可在此变更；新问题必须归类为五类之一：
 
 | 决策项 | 取值 | 依据/备注 |
 |---|---|---|
+| Provider 适配策略 | 通用 `OpenAICompatibleAdapter`（可配置 providerId/baseUrl/apiKey/model）覆盖全部 OpenAI 兼容厂商（Agnes/千问/豆包/GPT/网关）；Agnes 为预设实例；非 OpenAI 兼容协议形态（Anthropic 原生/Gemini 原生）按 `VLMProvider` 接口新增 Adapter 类 | 规格一.2 模型独立；Agent 经 `provider_id` 显式选择，绝无自动路由 |
+| Provider 装配 | `VISION_PROVIDERS_JSON` 数组（{providerId, apiKey, baseUrl?, model?, displayName?}）；`AGNES_*` env 兼容旧配置；多家并存 | 规格 B 类 |
 | 包管理 | pnpm workspaces（`@mcp-vision/*`）；pnpm 11 构建审批用 `allowBuilds` | 拓扑构建顺序 |
 | 语言/模块 | TypeScript，NodeNext / ESM，Node >= 24（实测 26.5.1） | 类型系统承载契约 |
 | 存储 | SQLite（Node 内置 `node:sqlite` `DatabaseSync`，WAL） | 免原生编译依赖；V1 单机 |

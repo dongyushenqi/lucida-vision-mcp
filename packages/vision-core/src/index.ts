@@ -12,5 +12,6 @@ export * from "./iqa.js";
 export * from "./net-address.js";
 export * from "./fetch-boundary.js";
 export * from "./provider.js";
+export * from "./providers/openai-compatible.js";
 export * from "./providers/agnes.js";
 export * from "./vision-core.js";
