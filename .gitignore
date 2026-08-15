@@ -1,0 +1,11 @@
+node_modules/
+lib/
+dist/
+coverage/
+*.tgz
+*.log
+.DS_Store
+*.sqlite
+*.sqlite-journal
+.env
+.env.local

@@ -1,0 +1,60 @@
+# MCP Vision Server
+
+通用视觉感知基础设施 —— **眼睛不是大脑**：只陈述视觉事实与局限，绝不输出领域诊断、行动建议或工作流编排。
+
+## 架构（四层职责隔离）
+
+```text
+Agent Strategy (主 AI 端)          ← 决策大脑（本仓库之外）
+        │ MCP Protocol (Legacy / Modern Family)
+MCP Compatibility Layer            ← 协议家族适配 / 取消桥 / Identity Context
+        │ Internal RPC
+MCP Vision Interface               ← Tool 路由 / 幂等控制 / Resource URI 解析 / Session 沙箱
+        │
+Vision Core                       ← Observation 图谱 / Operation 生命周期 / IQA / Provider Adapter
+```
+
+依赖方向单向：`server → compatibility → vision-interface → vision-core → contracts`。
+**Vision Core 禁止 import 任何 MCP 协议包**（协议家族独立的物理保证）。
+
+## 包布局（pnpm workspaces，前缀 `@mcp-vision/*`）
+
+| 包 | 职责 |
+|---|---|
+| `contracts` | 领域类型 + zod schema + schema_version 演进 + 错误码命名空间 + JCS 规范化 |
+| `vision-core` | Observation Graph、Operation 生命周期与 Commit Boundary、Capability Registry、统一 Fetch Boundary、Provider Adapter |
+| `vision-interface` | 7 个 Tool（session.create/get/delete、observe、detect、ocr、operation.get/cancel）、幂等/去重/冲突、Session 授权沙箱 |
+| `compatibility` | Legacy 协议家族（官方 MCP SDK）、协议取消 → 内部 CancellationToken 桥、Modern 占位 |
+| `server` | 装配壳 + stdio 传输入口 |
+
+## V1 决策速览（详见 `docs/DECISIONS.md`）
+
+- 语言：TypeScript（NodeNext / ESM）/ 官方 `@modelcontextprotocol/sdk`
+- 存储：SQLite（Node 内置 `node:sqlite`，WAL）
+- 首个 Provider：Agnes `agnes-2.5-flash`（OpenAI 兼容：`https://apihub.agnes-ai.com/v1`，Bearer key）
+- 传输：stdio（本地单机）
+
+## 开发
+
+```bash
+pnpm install
+pnpm build
+pnpm test
+```
+
+## 状态
+
+- [x] M0 contracts（领域契约）31 测试
+- [x] M1 vision-core（图谱/Operation/Fetch Boundary/Agnes Adapter）35 测试
+- [x] M2 vision-interface（8 个工具 + 幂等 + 沙箱）18 测试
+- [x] M3 compatibility + server（Legacy Family + stdio）7 E2E + 2 测试
+- [x] M4 E2E 冒烟验收（InMemoryTransport 协议级 + stdio 真实子进程）
+- 合计 93 个测试全绿（`pnpm test`）
+
+## 真实 Provider 冒烟（可选，需 API Key）
+
+```bash
+# 需要 AGNES_API_KEY；启动时自动执行能力探针（仅更新 Capability Registry）
+cd packages/server
+AGNES_API_KEY=<key> node lib/index.js   # 或 stdio-smoke.mjs 走客户端冒烟
+```
