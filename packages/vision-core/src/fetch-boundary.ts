@@ -14,7 +14,7 @@ import { Agent as HttpsAgent } from "node:https";
 import { ApplicationErrorCode, VisionError, type ImageInput } from "@mcp-vision/contracts";
 import { isTimeoutAbort, OperationCancelledError } from "./cancellation.js";
 import { normalizeMimeType, sniffMimeType, SUPPORTED_IMAGE_MIME_TYPES } from "./mime.js";
-import { blockingLookup } from "./net-address.js";
+import { blockingLookup, resolveAndCheck } from "./net-address.js";
 
 export interface FetchBoundaryConfig {
   /** 可注入 fetch（单测用）；缺省为全局 fetch */
@@ -134,6 +134,23 @@ export class FetchBoundary {
     }
     // URI 授权边界：依 Principal/Tenant + 资源来源策略判定（SSRF ≠ 授权）
     this.authorizeUri(u, authCtx);
+
+    // SSRF 前置检查（CI 环境差异修复）：agent.lookup 门禁在部分 Node/undici 版本上
+    // 未生效（Node 24 runner 实测），fetch 前显式解析主机并阻断私有地址——双保险，
+    // agent 继续作为 DNS 重绑定（TOCTOU）兜底。
+    try {
+      await resolveAndCheck(u.hostname);
+    } catch (err) {
+      if (err instanceof Error && err.message.includes("SSRF blocked")) {
+        throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, "URI 主机为私有/保留地址", {
+          host: u.hostname,
+        });
+      }
+      throw new VisionError(ApplicationErrorCode.RESOURCE_NOT_FOUND, "URI 主机无法解析", {
+        host: u.hostname,
+        cause: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     let current = u;
     let redirects = 0;

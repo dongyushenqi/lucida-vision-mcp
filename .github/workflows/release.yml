@@ -1,9 +1,11 @@
 name: Release
 
-# 打 tag（v*）时自动发布：
-#   附件 1 = 源码包（source.zip，供开发者）
-#   附件 2 = 发布包（lucida-vision-mcp-vX.Y.Z.zip，下载即用，含引导脚本）
-# 密钥安全：本流程不接触任何密钥；AGNES_API_KEY 只存在于使用者本机环境变量。
+# Auto-publish on version tags (v*):
+#   asset 1 = source archive (for developers)
+#   asset 2 = release package lucida-vision-mcp-vX.Y.Z.zip (ready to use)
+#   npm publish (if NPM_TOKEN secret is configured)
+# Key security: this workflow never touches provider keys.
+
 on:
   push:
     tags: ["v*"]
@@ -17,7 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        # pnpm 版本由根 package.json 的 packageManager 字段决定（避免双指定冲突）
+        # pnpm version comes from the packageManager field in root package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -29,17 +31,14 @@ jobs:
       - name: Package release bundle
         run: node scripts/build-release.mjs
       - name: Verify release bundle (MCP handshake)
-        # 发布自检：坏包不上架
         run: node e2e/verify-release.mjs
         working-directory: packages/server
       - name: Package source archive
-        # 源码包 = 仓库快照（不含 node_modules / lib / .git）
         run: git archive --format=zip -o dist/lucida-vision-mcp-source.zip HEAD
       - name: Publish to npm
-        # 配置仓库 Secret NPM_TOKEN（npmjs.com 的 Access Token）后自动发布；
-        # 未配置时跳过（发布包 zip 照常产出）。
-        # 注意：if 必须用 secrets 上下文判断——步骤级 env 在 if 求值后才注入，
-        # 用 env.NPM_TOKEN 判断在未配 secret 时会求值为 true 导致发布失败（审查 3）。
+        # Skip gracefully when NPM_TOKEN secret is not configured.
+        # Note: use the secrets context in `if` — a step-level env is injected
+        # after `if` evaluation, so env.NPM_TOKEN would be empty there.
         if: ${{ secrets.NPM_TOKEN != '' }}
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
