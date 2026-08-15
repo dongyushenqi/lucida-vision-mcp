@@ -9,4 +9,5 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "minimal + permissions test"
+      - run: echo "if-guard experiment"
+        if: secrets.NPM_TOKEN != ''
