@@ -49,6 +49,9 @@ jobs:
           fi
           node scripts/build-npm.mjs
           cd dist/npm
+          # The NPM_TOKEN env var does NOT authenticate npm by itself on a fresh
+          # runner; write it into an .npmrc so `npm publish` can use it.
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
           npm publish --access public
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
