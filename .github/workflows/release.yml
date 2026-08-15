@@ -1,13 +1,57 @@
 name: Release
+
+# Auto-publish on version tags (v*):
+#   asset 1 = source archive (for developers)
+#   asset 2 = release package lucida-vision-mcp-vX.Y.Z.zip (ready to use)
+#   npm publish (only if NPM_TOKEN secret is configured)
+# Key security: this workflow never touches provider keys.
+
 on:
   push:
     tags:
       - "v*"
+
 permissions:
   contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "if-guard experiment"
-        if: secrets.NPM_TOKEN != ''
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm -r run build
+      - name: Package release bundle
+        run: node scripts/build-release.mjs
+      - name: Verify release bundle (MCP handshake)
+        run: node e2e/verify-release.mjs
+        working-directory: packages/server
+      - name: Package source archive
+        run: git archive --format=zip -o dist/lucida-vision-mcp-source.zip HEAD
+      - name: Publish to npm
+        # NOTE: never reference `secrets.X` inside an `if:` condition here —
+        # GitHub's workflow parser rejects it ("invalid workflow", 0s fail) and
+        # it also breaks the `on: push: tags` event filter. Instead the token is
+        # injected via env and the absence check is done in the shell.
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NPM_TOKEN}" ]; then
+            echo "NPM_TOKEN not configured - skipping npm publish."
+            exit 0
+          fi
+          node scripts/build-npm.mjs
+          cd dist/npm
+          npm publish --access public
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
