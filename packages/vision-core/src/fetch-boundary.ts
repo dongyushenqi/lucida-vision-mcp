@@ -17,6 +17,8 @@ import { normalizeMimeType, sniffMimeType, SUPPORTED_IMAGE_MIME_TYPES } from "./
 import { blockingLookup } from "./net-address.js";
 
 export interface FetchBoundaryConfig {
+  /** 可注入 fetch（单测用）；缺省为全局 fetch */
+  fetchImpl?: typeof fetch;
   /** inline 最大字节数（解码前按 Base64 长度校验） */
   maxInlineBytes: number;
   /** uri 拉取最大字节数 */
@@ -83,11 +85,13 @@ export interface FetchedImage {
 export class FetchBoundary {
   private readonly httpAgent: HttpAgent;
   private readonly httpsAgent: HttpsAgent;
+  private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly config: FetchBoundaryConfig = DEFAULT_FETCH_BOUNDARY_CONFIG) {
     // 每一次连接都经私有地址门禁（DNS 重绑定防护）
     this.httpAgent = new HttpAgent({ lookup: blockingLookup });
     this.httpsAgent = new HttpsAgent({ lookup: blockingLookup });
+    this.fetchImpl = config.fetchImpl ?? fetch;
   }
 
   /** 按输入模式解析为本地字节；resource_ref 不属于本边界（由接口层授权后从存储 dereference）。 */
@@ -148,19 +152,19 @@ export class FetchBoundary {
           signal: combined,
           headers: { accept: "image/*" },
         } as RequestInit & { agent: (parsed: URL) => unknown };
-        res = await fetch(current, init);
+        res = await this.fetchImpl(current, init);
       } catch (err) {
         // 取消/超时区分（审查 #2）：用户取消 → OperationCancelledError；超时 → 事实化错误
         if (signal?.aborted) {
           throw new OperationCancelledError("fetch cancelled");
         }
+        if (isTimeoutAbort(err) || (err instanceof Error && err.name === "AbortError" && isTimeoutAbort(combined.reason))) {
+          throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, "URI 获取超时", {
+            uri: current.href,
+            reason: "timeout",
+          });
+        }
         if (err instanceof Error && err.name === "AbortError") {
-          if (isTimeoutAbort(combined.reason)) {
-            throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, "URI 获取超时", {
-              uri: current.href,
-              reason: "timeout",
-            });
-          }
           throw new OperationCancelledError("fetch cancelled");
         }
         throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, `URI 获取失败`, {
@@ -211,7 +215,27 @@ export class FetchBoundary {
         });
       }
 
-      const bytes = await readBodyCapped(res.body, this.config.maxUriBytes, signal);
+      let bytes: Uint8Array;
+      try {
+        bytes = await readBodyCapped(res.body, this.config.maxUriBytes, combined);
+      } catch (err) {
+        if (signal?.aborted) {
+          throw new OperationCancelledError("fetch cancelled");
+        }
+        if (isTimeoutAbort(err) || (err instanceof Error && err.name === "AbortError" && isTimeoutAbort(combined.reason))) {
+          throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, "URI 读取超时", {
+            uri: current.href,
+            reason: "timeout",
+          });
+        }
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new OperationCancelledError("fetch cancelled");
+        }
+        throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, `URI 读取失败`, {
+          uri: current.href,
+          cause: err instanceof Error ? err.message : String(err),
+        });
+      }
       const declared = normalizeMimeType(res.headers.get("content-type") ?? "");
       return validatePayload(bytes, declared, current.href);
     }
@@ -307,6 +331,9 @@ async function readBodyCapped(
   let total = 0;
   for (;;) {
     if (signal?.aborted) {
+      if (isTimeoutAbort(signal.reason)) {
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      }
       throw new OperationCancelledError("fetch cancelled");
     }
     const { done, value } = await reader.read();

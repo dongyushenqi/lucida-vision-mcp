@@ -88,22 +88,27 @@ export async function createServer(config: ServerConfig) {
   // 能力 TTL 刷新（审查 #8）：按 VISION_PROBE_INTERVAL_HOURS（默认 24h，0=关闭）定时重探，
   // unref() 不阻塞进程退出；结果只进 Registry。
   if (config.probeOnBoot && config.probeIntervalHours > 0) {
+    let refreshing = false;
     const timer = setInterval(() => {
-      for (const provider of providers) {
-        provider
-          .probe(AbortSignal.timeout(config.probeTimeoutMs))
-          .then((verified) => {
+      if (refreshing) return;
+      refreshing = true;
+      Promise.all(
+        providers.map(async (provider) => {
+          try {
+            const verified = await provider.probe(AbortSignal.timeout(config.probeTimeoutMs));
             core.capabilities.verify(verified);
             process.stderr.write(
               `[mcp-vision] probe refresh: provider=${provider.providerId} verified=${verified.capabilities.join(",") || "(none)"}\n`,
             );
-          })
-          .catch(() => {
+          } catch {
             process.stderr.write(
               `[mcp-vision] probe refresh failed: provider=${provider.providerId}（保留旧能力结论）\n`,
             );
-          });
-      }
+          }
+        }),
+      ).finally(() => {
+        refreshing = false;
+      });
     }, config.probeIntervalHours * 3600_000);
     timer.unref();
   }

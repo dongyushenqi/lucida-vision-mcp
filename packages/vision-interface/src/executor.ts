@@ -187,7 +187,8 @@ export class VisionExecutor {
   /* ------------------------------------------------------------ */
 
   private async operationGet(req: ExecuteRequest, args: z.infer<typeof OperationGetArgs>): Promise<ExecuteResponse> {
-    this.sandbox.authorize(args.vision_session_id, req.identity);
+    // 读取保留证据允许 closed（审查 #5：关闭仅禁止新的执行类操作）
+    this.sandbox.authorize(args.vision_session_id, req.identity, { allowClosed: true });
     const op = this.core.operations.get(args.vision_session_id, args.operation_id);
     if (!op) {
       throw new VisionError(ApplicationErrorCode.OPERATION_NOT_FOUND, "operation 不存在", {
@@ -209,7 +210,7 @@ export class VisionExecutor {
     }
     if (existing.status === "running") {
       // 审查 #1：先中止底层执行（in-flight 映射 → CancellationTokenSource），再落状态
-      const token = this.inflight.get(args.operation_id);
+      const token = this.inflight.get(this.inflightKey(args.vision_session_id, args.operation_id));
       if (token) {
         token.cancel();
       }
@@ -250,8 +251,8 @@ export class VisionExecutor {
     }
 
     try {
-      // in-flight 注册（审查 #1）：operation_id → CancellationTokenSource，供 operation.cancel 中止
-      this.inflight.set(operationId, req.cancel);
+      // in-flight 注册（审查 #1）：(session, operation_id) → CancellationTokenSource，供 operation.cancel 中止
+      this.inflight.set(this.inflightKey(sessionId, operationId), req.cancel);
 
       // 图像解析：uri/inline 走统一 Fetch Boundary；resource_ref 先授权后 dereference
       const image = await this.resolveImage(args.image_input, sessionId, req.identity, req.cancel.signal);
@@ -332,8 +333,13 @@ export class VisionExecutor {
         operation: op,
       };
     } finally {
-      this.inflight.delete(operationId);
+      this.inflight.delete(this.inflightKey(sessionId, operationId));
     }
+  }
+
+  /** in-flight 取消映射的作用域与 Operation 去重一致：Vision Session。 */
+  private inflightKey(sessionId: string, operationId: string): string {
+    return `${sessionId}/${operationId}`;
   }
 
   /* ------------------------------------------------------------ */
@@ -497,10 +503,18 @@ export class VisionExecutor {
         requireBbox: kind === "detect",
         width,
         height,
+        allowedLabels: kind === "detect" ? args.labels : undefined,
       });
-      if (structured && structured.length > 0) {
-        return structured.map((o) =>
-          this.toObservation(
+      if (structured) {
+        return structured.map((o) => {
+          const limitations = [
+            ...(o.confidenceInvalid
+              ? ["confidence_invalid"]
+              : o.confidence === undefined
+                ? ["confidence_not_provided_by_provider"]
+                : []),
+          ];
+          return this.toObservation(
             base,
             o.label,
             o.bbox
@@ -510,8 +524,9 @@ export class VisionExecutor {
             operationId,
             provider,
             o.text,
-          ),
-        );
+            limitations,
+          );
+        });
       }
       // 结构化解析失败或全部项不合格：如实陈述事实，不伪造结构化证据
       return [
@@ -596,6 +611,7 @@ interface StructuredObject {
   label: string;
   bbox?: [number, number, number, number];
   confidence?: number;
+  confidenceInvalid?: boolean;
   text?: string;
 }
 
@@ -605,6 +621,8 @@ interface StructuredParseOptions {
   /** 图像尺寸（bbox 边界校验） */
   width: number;
   height: number;
+  /** detect：仅接受 Agent 声明的 label（机械白名单，不做语义解释） */
+  allowedLabels?: string[];
 }
 
 function parseStructuredObservations(
@@ -619,6 +637,7 @@ function parseStructuredObservations(
       if (typeof o !== "object" || o === null) continue;
       const rec = o as Record<string, unknown>;
       if (typeof rec.label !== "string" || rec.label.length === 0) continue;
+      if (opts.allowedLabels && !opts.allowedLabels.includes(rec.label)) continue;
       const item: StructuredObject = { label: rec.label };
       // bbox 校验：4 个数、坐标序合法（x1<=x2, y1<=y2）、不越图像边界
       if (Array.isArray(rec.bbox) && rec.bbox.length === 4 && rec.bbox.every((n) => typeof n === "number")) {
@@ -642,12 +661,15 @@ function parseStructuredObservations(
       if (typeof rec.confidence === "number") {
         if (rec.confidence >= 0 && rec.confidence <= 1) {
           item.confidence = rec.confidence;
+        } else {
+          item.confidenceInvalid = true;
         }
       }
       if (typeof rec.text === "string") item.text = rec.text;
       objects.push(item);
     }
-    return objects.length > 0 ? objects : undefined;
+    // 空数组是合法“未发现对象”结果；非空但全部不合格才是解析失败。
+    return objects.length > 0 || parsed.objects.length === 0 ? objects : undefined;
   } catch {
     return undefined;
   }

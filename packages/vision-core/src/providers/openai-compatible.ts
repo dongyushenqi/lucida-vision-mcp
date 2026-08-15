@@ -245,12 +245,12 @@ export class OpenAICompatibleAdapter implements VLMProvider {
           throw err;
         }
         // 取消/超时区分（审查 #2）：用户取消原样上抛；超时 → PROVIDER_TIMEOUT
+        if (isTimeoutAbort(err) || (err instanceof Error && err.name === "AbortError" && isTimeoutAbort(combined.reason))) {
+          throw new VisionError(ApplicationErrorCode.PROVIDER_TIMEOUT, `${this.providerId} 请求超时`, {
+            timeout_ms: this.timeoutMs,
+          });
+        }
         if (err instanceof Error && err.name === "AbortError") {
-          if (isTimeoutAbort(combined.reason)) {
-            throw new VisionError(ApplicationErrorCode.PROVIDER_TIMEOUT, `${this.providerId} 请求超时`, {
-              timeout_ms: this.timeoutMs,
-            });
-          }
           throw err;
         }
         lastError = err;

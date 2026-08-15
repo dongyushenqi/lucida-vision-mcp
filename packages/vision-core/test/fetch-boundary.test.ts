@@ -93,6 +93,22 @@ describe("FetchBoundary inline 校验（规格四.1）", () => {
     });
   });
 
+  it("uri 模式：真实 Node 超时形态（DOMException TimeoutError）→ SECURITY_URI_DENIED(timeout)", async () => {
+    const boundary = new FetchBoundary({
+      ...DEFAULT,
+      timeoutMs: 1000,
+      fetchImpl: (async () => {
+        throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+      }) as typeof fetch,
+    });
+    await expect(
+      boundary.resolve({ type: "uri", uri: "https://example.com/x.png" }),
+    ).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.SECURITY_URI_DENIED,
+      details: { reason: "timeout" },
+    });
+  });
+
   it("uri 模式：不支持的 scheme → SECURITY_UNSUPPORTED_SCHEME", async () => {
     await expect(boundary.resolve({ type: "uri", uri: "file:///etc/passwd" })).rejects.toMatchObject({
       applicationErrorCode: ApplicationErrorCode.SECURITY_UNSUPPORTED_SCHEME,

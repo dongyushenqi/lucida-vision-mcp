@@ -243,7 +243,6 @@ describe("取消契约（规格二.2）", () => {
     const provider = new MockProvider({
       declared: DECLARED,
       verified: ["image_understanding"],
-      delayMs: 100_000,
     });
     // 覆写 execute：等待 abort
     const origExecute = provider.execute.bind(provider);
@@ -284,6 +283,74 @@ describe("取消契约（规格二.2）", () => {
     const s = r.result.structured as { cancelled: boolean };
     expect(s.cancelled).toBe(true);
     expect(r.operation!.status).toBe("cancelled");
+  });
+
+  it("in-flight 取消映射按 Vision Session 隔离（同一 operation_id 不跨 Session 误中止）", async () => {
+    const aborted: string[] = [];
+    const provider = new MockProvider({
+      declared: DECLARED,
+      verified: ["image_understanding"],
+    });
+    const origExecute = provider.execute.bind(provider);
+    provider.execute = async (req, signal) => {
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          if (!signal.aborted) resolve();
+        }, 200);
+        signal.addEventListener(
+          "abort",
+          () => {
+            clearTimeout(timer);
+            aborted.push("aborted");
+            reject(new OperationCancelledError("aborted"));
+          },
+          { once: true },
+        );
+      });
+      return origExecute(req, signal);
+    };
+
+    const core = new VisionCore({
+      store: new InMemoryVisionStore(),
+      fetchBoundary: new FetchBoundary(),
+      providers: [provider],
+    });
+    core.capabilities.register(provider.declare());
+    core.capabilities.verify(await provider.probe());
+    const executor = new VisionExecutor(core);
+    const createSession = async () => {
+      const created = await executor.execute({
+        toolName: "vision.session.create",
+        args: {},
+        identity: IDENTITY,
+        cancel: new CancellationTokenSource(),
+      });
+      return (created.result.structured as { vision_session_id: string }).vision_session_id;
+    };
+    const sessionA = await createSession();
+    const sessionB = await createSession();
+    const sameArgs = (sessionId: string) =>
+      OBSERVE_ARGS(sessionId, { operation_id: "op_shared" });
+
+    const runningA = call(executor, "vision.observe", sameArgs(sessionA));
+    await new Promise((r) => setTimeout(r, 30));
+    const runningB = call(executor, "vision.observe", sameArgs(sessionB));
+    await new Promise((r) => setTimeout(r, 30));
+
+    const cancelA = await call(executor, "vision.operation.cancel", {
+      vision_session_id: sessionA,
+      operation_id: "op_shared",
+    });
+    expect((cancelA.result.structured as { operation: { status: string } }).operation.status).toBe("cancelled");
+
+    const rA = await runningA;
+    const rB = await runningB;
+    // 会话作用域映射：取消 A 只中止 A；B 正常完成
+    expect(aborted).toHaveLength(1);
+    expect(rA.result.structured).toMatchObject({ cancelled: true });
+    expect(rA.operation!.status).toBe("cancelled");
+    expect(rB.result.isError).toBe(false);
+    expect(rB.operation!.status).toBe("completed");
   });
 
   it("取消 → operation cancelled；已 committed 证据保留；取消不是错误", async () => {
@@ -447,6 +514,7 @@ describe("参数校验", () => {
 describe("closed Session 语义（审查 #5）", () => {
   it("delete 后：新执行被拒（SESSION_CLOSED）；读取状态与保留证据仍可", async () => {
     const { executor, sessionId, core } = await makeEnv({ verified: ["image_understanding"] });
+    await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { operation_id: "op_keep" }));
     await call(executor, "vision.session.delete", { vision_session_id: sessionId });
 
     // 新执行 → SESSION_CLOSED（isError，非异常）
@@ -456,14 +524,13 @@ describe("closed Session 语义（审查 #5）", () => {
       (r.result.structured as { error: { application_error_code: string } }).error.application_error_code,
     ).toBe(ApplicationErrorCode.SESSION_CLOSED);
 
-    // operation.get 同样拒绝
+    // operation.get 读取保留记录允许（closed 只禁新执行）
     const og = await call(executor, "vision.operation.get", {
       vision_session_id: sessionId,
-      operation_id: "whatever",
+      operation_id: "op_keep",
     });
-    expect(
-      (og.result.structured as { error: { application_error_code: string } }).error.application_error_code,
-    ).toBe(ApplicationErrorCode.SESSION_CLOSED);
+    expect(og.result.isError).toBe(false);
+    expect((og.result.structured as { operation: { status: string } }).operation.status).toBe("completed");
 
     // session.get 读取允许（allowClosed）
     const sg = await call(executor, "vision.session.get", { vision_session_id: sessionId });
@@ -513,6 +580,30 @@ describe("结构化结果契约校验（审查 #6）", () => {
     expect(s.observations[0]!.limitations).toContain("structured_parse_failed");
   });
 
+  it('detect：合法空结果 {"objects":[]} 不是解析失败', async () => {
+    const { executor, sessionId } = await makeEnv({
+      verified: ["structured_detection"],
+      text: JSON.stringify({ objects: [] }),
+    });
+    const r = await call(executor, "vision.detect", OBSERVE_ARGS(sessionId, { labels: ["crack"] }));
+    expect(r.result.isError).toBe(false);
+    const s = r.result.structured as { observations: unknown[] };
+    expect(s.observations).toEqual([]);
+    expect(r.operation!.status).toBe("completed");
+  });
+
+  it("detect：Provider 返回白名单外 label → 不进入 Observation 图谱", async () => {
+    const { executor, sessionId } = await makeEnv({
+      verified: ["structured_detection"],
+      text: JSON.stringify({ objects: [{ label: "cat", bbox: [0, 0, 0, 0] }] }),
+    });
+    const r = await call(executor, "vision.detect", OBSERVE_ARGS(sessionId, { labels: ["dog"] }));
+    const s = r.result.structured as { observations: Array<{ label: string; limitations: string[] }> };
+    expect(s.observations).toHaveLength(1);
+    expect(s.observations[0]!.label).toBe("visual_evidence");
+    expect(s.observations[0]!.limitations).toContain("structured_parse_failed");
+  });
+
   it("observe json_mode：无 bbox 允许（降级 full_image）；非法 bbox 降级；confidence 超界置 null", async () => {
     const text = JSON.stringify({
       objects: [
@@ -527,14 +618,20 @@ describe("结构化结果契约校验（审查 #6）", () => {
     });
     const r = await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { json_mode: true }));
     const s = r.result.structured as {
-      observations: Array<{ location: { type: string }; confidence: { value: number | null } }>;
+      observations: Array<{
+        location: { type: string };
+        confidence: { value: number | null };
+        limitations: string[];
+      }>;
     };
     expect(s.observations).toHaveLength(3);
     expect(s.observations[0]!.location.type).toBe("full_image"); // 无 bbox → full_image
     expect(s.observations[0]!.confidence.value).toBeNull(); // 超界 → null
+    expect(s.observations[0]!.limitations).toContain("confidence_invalid");
     expect(s.observations[1]!.location.type).toBe("bbox");
     expect(s.observations[1]!.confidence.value).toBe(0.5);
     expect(s.observations[2]!.location.type).toBe("full_image"); // 非法 bbox → 降级
+    expect(s.observations[2]!.limitations).toContain("confidence_not_provided_by_provider");
   });
 });
 

@@ -8,6 +8,7 @@ describe("Server 配置", () => {
     expect(cfg.identity).toEqual({ principalId: "local", tenantId: "default" });
     expect(cfg.agnes.apiKey).toBe("");
     expect(cfg.probeOnBoot).toBe(true);
+    expect(cfg.probeIntervalHours).toBe(24);
   });
 
   it("环境变量覆盖", () => {
@@ -17,6 +18,7 @@ describe("Server 配置", () => {
       AGNES_API_KEY: "sk-test",
       AGNES_BASE_URL: "https://example.com/v1",
       VISION_PROBE_ON_BOOT: "false",
+      VISION_PROBE_INTERVAL_HOURS: "0",
       VISION_ALLOWED_URI_ORIGINS: "example.com, images.example.org",
     });
     expect(cfg.dbPath).toBe("C:/data/vision.sqlite");
@@ -24,7 +26,13 @@ describe("Server 配置", () => {
     expect(cfg.agnes.apiKey).toBe("sk-test");
     expect(cfg.agnes.baseUrl).toBe("https://example.com/v1");
     expect(cfg.probeOnBoot).toBe(false);
+    expect(cfg.probeIntervalHours).toBe(0);
     expect(cfg.allowedUriOrigins).toEqual(["example.com", "images.example.org"]);
+  });
+
+  it("VISION_PROBE_INTERVAL_HOURS 非法值回退默认 24", () => {
+    expect(loadConfig({ VISION_PROBE_INTERVAL_HOURS: "abc" }).probeIntervalHours).toBe(24);
+    expect(loadConfig({ VISION_PROBE_INTERVAL_HOURS: "-1" }).probeIntervalHours).toBe(24);
   });
 
   it("URI 来源白名单缺省为空（仅 SSRF 防护）", () => {

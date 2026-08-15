@@ -214,6 +214,18 @@ describe("OpenAICompatibleAdapter：多厂商通用性", () => {
     });
   });
 
+  it("真实 Node 超时形态（DOMException TimeoutError）同样映射 PROVIDER_TIMEOUT", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    });
+    const adapter = makeAdapter({}, fetchImpl as unknown as typeof fetch);
+    await expect(
+      adapter.execute({ images: [], instruction: "x", jsonMode: false }, new AbortController().signal),
+    ).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.PROVIDER_TIMEOUT,
+    });
+  });
+
   it("用户取消原样上抛（AbortError，非 PROVIDER_TIMEOUT）", async () => {
     const ac = new AbortController();
     const fetchImpl = vi.fn((_url: string, init: RequestInit) => {
