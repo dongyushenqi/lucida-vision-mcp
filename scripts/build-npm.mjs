@@ -38,7 +38,7 @@ const pkgJson = {
   files: ["bin"],
   keywords: ["mcp", "vision", "vlm", "visual", "model-context-protocol", "server", "ocr", "detect"],
   license: "MIT",
-  // repository 在真实 GitHub 仓库 URL 确定后由发布前配置补上，不放占位 URL。
+  repository: { type: "git", url: "https://github.com/dongyushenqi/lucida-vision-mcp.git" },
   publishConfig: { access: "public" },
 };
 writeFileSync(join(npmDir, "package.json"), JSON.stringify(pkgJson, null, 2) + "\n");
