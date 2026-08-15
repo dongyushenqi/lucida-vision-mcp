@@ -1,0 +1,32 @@
+# Temporary diagnostic workflow: verify the NPM_TOKEN secret against the npm
+# registry WITHOUT publishing and WITHOUT ever printing the token value.
+# Safe to delete after use.
+name: NPM token probe
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe registry auth (prints status codes only, never the token)
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          probe() {
+            desc="$1"; tok="$2"
+            code=$(curl -sS -o /tmp/body.json -w "%{http_code}" \
+              -H "Authorization: Bearer ${tok}" \
+              https://registry.npmjs.org/-/whoami)
+            echo "[${desc}] HTTP ${code}"
+            head -c 300 /tmp/body.json || true
+            echo ""
+          }
+          if [ -z "${NPM_TOKEN}" ]; then
+            echo "SECRET IS EMPTY"
+            exit 0
+          fi
+          echo "secret length: ${#NPM_TOKEN}"
+          probe "raw-secret " "${NPM_TOKEN}"
+          probe "trimmed    " "$(printf '%s' "${NPM_TOKEN}" | tr -d '[:space:]')"
