@@ -1,5 +1,4 @@
 node_modules/
-lib/
 dist/
 coverage/
 *.tgz
@@ -9,3 +8,8 @@ coverage/
 *.sqlite-journal
 .env
 .env.local
+
+# Compiled per-package build outputs (never committed).
+# NOTE: do NOT use a bare "lib" here — it would also ignore the committed
+# source file scripts/lib/bundle-server.mjs and break the release build.
+/packages/*/lib/
