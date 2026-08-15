@@ -1,170 +1,130 @@
 # lucida-vision-mcp
 
-**Lucida** (Latin: bright / clear) — to see clearly.
-**vision-mcp**: the conventional category suffix for vision-perception MCP servers.
+A pair of eyes for text-only AI: a general-purpose visual perception MCP server. It states verifiable visual facts — never diagnoses, never advises.
 
-A general-purpose visual perception infrastructure — **eyes, not brain**: it states
-visual facts and limitations only, never outputs domain diagnoses, action suggestions,
-or workflow orchestration. (中文版: [README.md](README.md))
+**eyes, not brain** — 通用视觉感知 MCP 服务器：只陈述可核验的视觉事实，不做诊断与决策。
 
-## Project Positioning (Honest Statement)
+[中文文档](README.md) · English (this page)
 
-**Purpose**: provide a standardized "visual perception organ" for AI that has no
-native vision capability (pure text models) — via the standard MCP protocol, images
-are handed to verifiable vision models and returned as **sourced visual evidence**
-(who looked, with which model, at what time), making the act of "seeing" auditable,
-verifiable, and honest.
+> **Lucida** (Latin: bright) — to see clearly.
 
-**What it can do**: probe-verified visual fact statements — image description,
-text extraction (OCR), structured detection (depends on the connected VLM); any
-OpenAI-compatible vision model can be attached (config only); unverified
-capabilities are honestly reported as "not executable".
+## What it is
 
-**Honest boundaries (important)**:
+Text-only models cannot see images. lucida-vision-mcp acts as their "visual organ" over the standard MCP protocol:
 
-1. **Ceiling = the connected VLM**. This system neither embellishes nor enhances:
-   under equal conditions it does not reach the level of AI with native vision
-   (e.g., GPT-4o / Claude native multimodal) looking at the image directly.
-2. **Not a simple skill**: skills are "prompts + scripts"; this is protocol-level
-   infrastructure — standard MCP protocol, Session/Operation/Observation domain
-   model, capability probes, Provenance audit, idempotency & cancellation
-    contracts, SSRF/authorization security boundaries, schema versioning, 154+
-   automated tests.
-3. **Different from typical vision MCPs**: capability probes (declared ∩ verified),
-   per-observation immutable provenance (model version + timestamp), server-side
-   image fetching protected by SSRF + origin policy, cancellation never destroys
-   committed evidence.
-4. **Lightweight production-grade**: engineering standards usable directly by
-   individuals/small teams (tests, 3-platform CI, error-code system, audit,
-   security boundaries, npm/zip/source distribution). **Not included**: enterprise
-   features (multi-tenant auth, rate limiting, retention cleanup, distributed
-   deployment) — added on demand.
-5. **Fine-grained recognition**: precision depends on the connected VLM;
-   **this system presets no default model** — which model to use is entirely
-   decided by your configuration, and each vendor's capabilities are disclosed
-   honestly after probe verification. For example, with Agnes (free model) in the
-   current test environment: detailed description and OCR passed real probes,
-   while structured detection failed its probe and is honestly reported as
-   "not executable"; switching to a stronger model re-verifies the capability
-   matrix automatically.
+1. The AI calls a tool, handing an image (local path / URL / inline data) to this server;
+2. The server sends it to **the vision model you configured** (any OpenAI-compatible API);
+3. The AI gets back sourced visual evidence: which model, which version, when it looked, what it saw.
 
-## Installation Options (Important)
+The capability ceiling is exactly the model you attach. What the model cannot do, the tools honestly report as "not executable" — never fabricated.
 
-| Option | For whom | What it is | How to use |
-|---|---|---|---|
-| **npm install** (`lucida-vision-mcp`) | Users comfortable with terminal commands | npm package (once published) | `npm install -g lucida-vision-mcp`, or `npx -y lucida-vision-mcp` to run without installing; offline: `npm install <tgz>` |
-| **Release zip** (`lucida-vision-mcp-vX.Y.Z.zip`) | Users unsure whether their machine has dependencies | Compiled single-file program + launcher scripts + MCP host config template, ~112 KB | Unzip → `install.cmd` (auto-detects/installs Node, **never overwrites your environment**) → set your key → connect to an MCP host |
-| **Source zip / git clone** | Developers (already have a toolchain) | All source + tests + CI, ~124 KB | `pnpm install && pnpm build` then run |
+## The 8 tools
 
-All three options deliver the same program (stdio, standard MCP protocol). The release
-package includes launchers for Windows (`install.cmd`/`start.cmd`) and macOS/Linux
-(`install.sh`/`start.sh`), plus bilingual instructions.
+| Tool | What it does |
+|---|---|
+| `vision.session.create` / `.get` / `.delete` | Session management (authorization sandbox and isolation unit for observations) |
+| `vision.observe` | General visual observation, returns evidence text; `json_mode=true` returns structured output (if verified for that model) |
+| `vision.ocr` | Extracts text from the image |
+| `vision.detect` | Structured detection for categories you declare, returns JSON bounding boxes (if verified for that model) |
+| `vision.operation.get` / `.cancel` | Query and cancel in-flight tasks; committed evidence is never destroyed by cancellation |
 
-## Platform Support
+## Quick start (npm)
+
+Requires Node.js ≥ 24.
+
+**Step 1**: merge this into your MCP host config (example: `claude_desktop_config.json` for Claude Desktop):
+
+```json
+{
+  "mcpServers": {
+    "vision": {
+      "command": "npx",
+      "args": ["-y", "lucida-vision-mcp"],
+      "env": {
+        "AGNES_API_KEY": "your vision model API key"
+      }
+    }
+  }
+}
+```
+
+> On Windows, if `npx` fails to start, use `"command": "cmd"` with `args` `["/c", "npx", "-y", "lucida-vision-mcp"]`.
+
+**Step 2**: restart the MCP host. Then just ask the AI "take a look at this image" — it will call the tools.
+
+You can also install globally and use the `lucida-vision-mcp` command directly: `npm install -g lucida-vision-mcp`.
+
+### Other install options
+
+- **Release zip** (no environment setup): download `lucida-vision-mcp-vX.Y.Z.zip` from [Releases](https://github.com/dongyushenqi/lucida-vision-mcp/releases), unzip, run `install.cmd` (Windows) or `install.sh` (macOS / Linux). An MCP host config template and bilingual instructions are included.
+- **Source** (developers): `pnpm install && pnpm build`.
+
+## Configuring vision models (providers)
+
+No model is preset — your configuration decides. Two ways:
+
+**Shortcut** (single model) — set `AGNES_API_KEY`; it defaults to the free Agnes vision model. Point `AGNES_BASE_URL` / `AGNES_VISION_MODEL` at any OpenAI-compatible service.
+
+**Standard** (multiple models) — set `VISION_PROVIDERS_JSON` (a JSON array, one entry per vendor). The Agent explicitly picks the executor via the `provider_id` argument; the server never auto-routes:
+
+```json
+[
+  { "providerId": "qwen",   "apiKey": "<key>", "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-vl-max", "displayName": "Qwen" },
+  { "providerId": "doubao", "apiKey": "<key>", "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",          "model": "doubao-1.5-vision-pro", "displayName": "Doubao" },
+  { "providerId": "gpt",    "apiKey": "<key>", "baseUrl": "https://api.openai.com/v1",                        "model": "gpt-4o", "displayName": "GPT" }
+]
+```
+
+Each provider's capabilities are verified by probes: once at boot, then re-verified every 24 hours. Capabilities a model does not support (e.g. structured detection on some models) are honestly reported as not executable.
+
+Non-OpenAI-compatible protocols (Anthropic / Gemini native APIs, etc.) need one adapter class — see [docs/PROVIDERS.md](docs/PROVIDERS.md).
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `VISION_PROVIDERS_JSON` | — | Multi-provider configuration (JSON array) |
+| `AGNES_API_KEY` | — | Single-model shortcut (backward-compatible entry) |
+| `AGNES_BASE_URL` / `AGNES_VISION_MODEL` | Agnes defaults | Override the shortcut's endpoint and model |
+| `VISION_PROBE_ON_BOOT` | `true` | Run capability probes at startup |
+| `VISION_PROBE_INTERVAL_HOURS` | `24` | Probe re-verification interval (hours) |
+| `VISION_ALLOWED_URI_ORIGINS` | empty | Allowlist of origins the server may fetch images from (comma-separated, SSRF protection) |
+| `VISION_MAX_INLINE_BYTES` | `10485760` | Maximum inline image size (bytes) |
+
+## Capabilities and boundaries
+
+- **Ceiling = the attached model.** Under equal conditions it does not reach native-multimodal AI (GPT-4o / Claude) looking at the image directly; this system never embellishes.
+- **Never lies.** Capabilities open up only after probe verification; unverified ones are honestly reported as "not executable".
+- **Auditable.** Every observation records model, version, and timestamp — immutably.
+- **Positioning.** Lightweight production-grade for individuals and small teams (154 tests, 3-platform CI, error-code system, audit and security boundaries); enterprise features (multi-tenant, rate limiting, distributed deployment) are out of scope.
+
+Full positioning statement, differences from skills and similar MCPs, architecture and package layout: [docs/OVERVIEW.md](docs/OVERVIEW.md).
+
+## Security
+
+- Server-side image fetching is guarded by SSRF protection plus an origin allowlist;
+- API keys are injected via environment variables only — never written to disk, database, or git history;
+- Cancellation never destroys committed evidence.
+
+## Platform support
 
 | Platform | Status |
 |---|---|
-| **Windows** | ✅ Fully supported: verified locally + automated CI tests |
-| **macOS** | ✅ Available: code and launcher scripts adapted, verified by CI automated tests; **not manually tested on local hardware** (dev environment is Windows) |
-| **Linux** | ✅ Available: code and launcher scripts adapted, verified by CI automated tests; **not manually tested on local hardware** (dev environment is Windows) |
+| Windows | Fully supported: manually verified + automated CI |
+| macOS / Linux | Available: code and scripts adapted, verified by automated CI (dev environment is Windows; no manual on-hardware testing) |
 
-## Architecture (Four-Layer Responsibility Isolation)
+## Docs and development
 
-```text
-Agent Strategy (main AI side)      ← decision brain (outside this repo)
-        │ MCP Protocol (Legacy / Modern Family)
-MCP Compatibility Layer            ← protocol family adaptation / cancellation bridge / Identity Context
-        │ Internal RPC
-MCP Vision Interface               ← tool routing / idempotency / resource URI parsing / session sandbox
-        │
-Vision Core                       ← Observation graph / Operation lifecycle / IQA / Provider adapters
-```
-
-Dependency direction is strictly one-way:
-`server → compatibility → vision-interface → vision-core → contracts`.
-**Vision Core must never import any MCP protocol package** (physical guarantee of
-protocol-family independence).
-
-## Packages (pnpm workspaces, prefix `@mcp-vision/*`)
-
-| Package | Responsibility |
-|---|---|
-| `contracts` | Domain types + zod schemas + schema_version evolution + error-code namespaces + JCS canonicalization |
-| `vision-core` | Observation graph, Operation lifecycle & commit boundary, Capability Registry, unified Fetch Boundary, Provider adapters |
-| `vision-interface` | 8 tools (session.create/get/delete, observe, detect, ocr, operation.get/cancel), idempotency/dedup/conflict, session authorization sandbox |
-| `compatibility` | Legacy protocol family (official MCP SDK), protocol-cancellation bridge, Modern placeholder |
-| `server` | Assembly shell + stdio transport entry |
-
-## V1 Decisions (details in `docs/DECISIONS.md`)
-
-- Language: TypeScript (NodeNext / ESM) / official `@modelcontextprotocol/sdk`
-- Storage: SQLite (Node built-in `node:sqlite`, WAL)
-- Provider: **no preset default model** — any OpenAI-compatible vision model can be attached by configuration (Agnes agnes-2.5-flash used for real-API verification during development)
-- Transport: stdio (local single-machine)
-
-## Development
+- [docs/OVERVIEW.md](docs/OVERVIEW.md) — positioning, architecture, package layout, test status
+- [docs/DECISIONS.md](docs/DECISIONS.md) — technical decision records
+- [docs/PROVIDERS.md](docs/PROVIDERS.md) — guide for adding new providers
 
 ```bash
 pnpm install
 pnpm build
-pnpm test
+pnpm test    # 154 tests; real-API cases run when a key is present, auto-skip otherwise
 ```
 
-## Multi-Provider Configuration (Model Independence)
+## License
 
-Any OpenAI-compatible vision model can be attached directly; each vendor is one
-config instance (`VISION_PROVIDERS_JSON`), and the Agent explicitly picks the
-executor via the `provider_id` tool argument (the server never auto-routes or
-fails over):
-
-```bash
-VISION_PROVIDERS_JSON='[
-  {"providerId":"qwen","apiKey":"<key>","baseUrl":"https://dashscope.aliyuncs.com/compatible-mode/v1","model":"qwen-vl-max","displayName":"Qwen"},
-  {"providerId":"doubao","apiKey":"<key>","baseUrl":"https://ark.cn-beijing.volces.com/api/v3","model":"doubao-1.5-vision-pro","displayName":"Doubao"},
-  {"providerId":"gpt","apiKey":"<key>","baseUrl":"https://api.openai.com/v1","model":"gpt-4o","displayName":"GPT"}
-]' node lib/index.js
-```
-
-Each vendor's capabilities are verified independently at boot by probes
-(Declared ∩ Verified → Effective); unverified capabilities (e.g. structured
-detection) are honestly reported as "not executable" — the server never pretends.
-`AGNES_API_KEY` env is only a backward-compatible shortcut (appended, no priority);
-**this system presets no default model** — your configuration decides.
-
-**Two-class rule** (integration): mainstream protocol (OpenAI-compatible) → config
-only, see above; non-mainstream protocols (Anthropic native / Gemini native, etc.)
-→ implement one adapter class against the `VLMProvider` interface. See
-[docs/PROVIDERS.md](docs/PROVIDERS.md).
-
-## Status
-
-- [x] M0 contracts (domain contracts) 33 tests
-- [x] M1 vision-core (graph/Operation/Fetch Boundary/IQA/Provider adapters) 72 tests
-- [x] M2 vision-interface (8 tools + idempotency + sandbox) 28 tests
-- [x] M3 compatibility + server (Legacy Family + stdio + release package) 21 tests
-- [x] M4 E2E smoke acceptance (InMemoryTransport protocol-level + stdio real subprocess + release bundle handshake)
-- 154 tests green (`pnpm test`); CI runs on Windows / macOS / Linux automatically
-
-## Real-Provider Testing (requires an API key; keys are never committed)
-
-**Security rule**: `AGNES_API_KEY` is injected via environment variables only
-(local shell / GitHub Secret); real keys must never appear in source, tests, docs,
-or git history.
-
-```bash
-# 1) stdio full-chain smoke (real probe + real execution)
-cd packages/server
-AGNES_API_KEY=<key> node stdio-smoke.mjs
-
-# 2) Real API full-chain acceptance (probe/observe/json_mode/ocr/detect/idempotency/conflict)
-AGNES_API_KEY=<key> node e2e-real.mjs
-
-# 3) vitest real-API cases (run automatically when a key is present, skipped otherwise)
-AGNES_API_KEY=<key> pnpm -r run test
-```
-
-GitHub scenarios:
-- `CI` workflow (push/PR): full regression without a key (real cases auto-skip);
-- `E2E Real Agnes API` workflow (manual trigger): injects the repository Secret `AGNES_API_KEY` and runs `e2e-real.mjs`.
-
-Free-tier note: each real test run consumes ~7 API calls (3 probes + 4 executions) — mind the rate limit.
+MIT
