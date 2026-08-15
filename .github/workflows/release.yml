@@ -32,6 +32,16 @@ jobs:
       - name: Package source archive
         # 源码包 = 仓库快照（不含 node_modules / lib / .git）
         run: git archive --format=zip -o dist/mcp-vision-server-source.zip HEAD
+      - name: Publish to npm
+        # 配置仓库 Secret NPM_TOKEN（npmjs.com 的 Access Token）后自动发布；
+        # 未配置时跳过（发布包 zip 照常产出）
+        if: env.NPM_TOKEN != ''
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          node scripts/build-npm.mjs
+          cd dist/npm
+          npm publish --access public
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

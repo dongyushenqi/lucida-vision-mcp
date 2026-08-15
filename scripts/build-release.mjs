@@ -8,13 +8,13 @@
  *
  * 运行：pnpm -r run build && node scripts/build-release.mjs
  */
-import { build } from "esbuild";
 import { ZipArchive } from "archiver";
-import { createWriteStream, copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createWriteStream, copyFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { ROOT, bundleServer } from "./lib/bundle-server.mjs";
 
-const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const root = ROOT;
 const serverPkg = JSON.parse(readFileSync(join(root, "packages/server/package.json"), "utf8"));
 const version = serverPkg.version;
 
@@ -27,18 +27,7 @@ mkdirSync(join(releaseDir, "bin"), { recursive: true });
 mkdirSync(join(releaseDir, "config"), { recursive: true });
 
 console.log(`[release] bundling server v${version} → single-file mjs ...`);
-await build({
-  entryPoints: [join(root, "packages/server/lib/index.js")],
-  bundle: true,
-  platform: "node",
-  format: "esm",
-  target: "node22",
-  outfile: bundleOut,
-  minify: true,
-  sourcemap: false,
-  // platform=node 自动将 node: 内置模块 external；zod/MCP SDK/工作区包全部打进单文件
-  // 入口 lib/index.js 自带 shebang（tsc 保留自 src/index.ts），esbuild 自动置顶
-});
+await bundleServer(bundleOut);
 
 const templates = [
   "install.cmd",

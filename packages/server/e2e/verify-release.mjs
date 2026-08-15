@@ -1,11 +1,13 @@
-// 发布包验证脚本：对 dist/release bundle 做真实 MCP 握手冒烟（Windows 本地实测用）
-// 运行：cd packages/server && node e2e/verify-release.mjs
+// 发布产物验证脚本：对 bundle 做真实 MCP 握手冒烟（Windows 本地实测用）
+// 运行：cd packages/server && node e2e/verify-release.mjs [bundle 路径]
+//   - 不带参数：验证 dist/release 发布包
+//   - 带参数：验证任意 bundle（如 npm 安装产物）
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
-// e2e/ → server → packages → root → dist/release/bin
-const bundle = new URL("../../../dist/release/bin/mcp-vision-server.mjs", import.meta.url).pathname
-  .replace(/^\/([A-Za-z]:)/, "$1");
+const defaultBundle = new URL("../../../dist/release/bin/mcp-vision-server.mjs", import.meta.url)
+  .pathname.replace(/^\/([A-Za-z]:)/, "$1");
+const bundle = process.argv[2] ?? defaultBundle;
 
 const transport = new StdioClientTransport({
   command: process.execPath,

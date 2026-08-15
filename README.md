@@ -7,10 +7,12 @@
 
 | 形态 | 给谁 | 是什么 | 怎么用 |
 |---|---|---|---|
-| **源码包**（Source zip，GitHub 自动生成） | 开发者（已有依赖环境） | 全部源码 + 测试 + CI，约 124 KB | `pnpm install && pnpm build` 后运行 |
+| **npm 安装**（`mcp-vision-srv`） | 习惯终端命令的用户 | npm 包（发布后） | `npm install -g mcp-vision-srv` 全局装，或 `npx -y mcp-vision-srv` 免安装直接跑；离线可 `npm install <tgz>` |
 | **发布包**（Release zip，`mcp-vision-server-vX.Y.Z.zip`） | 不确定自己环境有没有依赖的用户 | 编译好的单文件程序 + 引导脚本 + MCP Host 配置模板，约 112 KB | 解压 → `install.cmd`（自动检测/安装 Node，**绝不覆盖已有环境**）→ 设 key → 接入 MCP Host |
+| **源码包**（Source zip / git clone） | 开发者（已有依赖环境） | 全部源码 + 测试 + CI，约 124 KB | `pnpm install && pnpm build` 后运行 |
 
-发布包内部含 Windows（`install.cmd`/`start.cmd`）与 macOS/Linux（`install.sh`/`start.sh`）引导脚本及中英双语说明。
+三种方式最终都是同一个程序（stdio 标准 MCP 协议）。发布包内部含 Windows
+（`install.cmd`/`start.cmd`）与 macOS/Linux（`install.sh`/`start.sh`）引导脚本及中英双语说明。
 
 ## 平台支持声明
 
