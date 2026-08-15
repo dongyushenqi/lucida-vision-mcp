@@ -80,15 +80,15 @@ export class OperationService {
     return { record: existing, deduplicated: true, inFlight: false };
   }
 
-  /** 终止 Operation（仅 running → 终态；身份字段不变，已 committed 证据保留）。 */
+  /**
+   * 终止 Operation（仅 running → 终态；身份字段不变，已 committed 证据保留）。
+   * 幂等（审查 #1）：若已被其他路径（如 operation.cancel 工具）置为终态，直接返回现有记录，
+   * 绝不抛错——避免"用户取消后 Provider 完成撞终态 → VISION_INTERNAL"。
+   */
   finish(sessionId: string, operationId: string, outcome: FinishOutcome): OperationRecord {
     const op = this.mustGet(sessionId, operationId);
     if (op.status !== "running") {
-      throw new VisionError(
-        ApplicationErrorCode.VISION_INTERNAL,
-        `operation 已处于终态，禁止重复终止`,
-        { operation_id: operationId, status: op.status },
-      );
+      return op;
     }
     const updated: OperationRecord = {
       ...op,

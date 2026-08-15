@@ -24,4 +24,5 @@ jobs:
       - name: Build
         run: pnpm -r run build
       - name: Real Agnes E2E (stdio + 真实探针/执行)
-        run: node packages/server/e2e-real.mjs
+        run: node e2e-real.mjs
+        working-directory: packages/server

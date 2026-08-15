@@ -20,6 +20,7 @@ import {
   type VerifiedCapability,
 } from "@mcp-vision/contracts";
 import { genId } from "../ids.js";
+import { isTimeoutAbort } from "../cancellation.js";
 import type { ProviderExecuteRequest, ProviderExecuteResult, VLMProvider } from "../provider.js";
 
 export interface OpenAiCompatibleProviderConfig {
@@ -180,10 +181,12 @@ export class OpenAICompatibleAdapter implements VLMProvider {
       model: this.model,
       messages: [{ role: "user", content }],
       temperature: this.temperature,
+      ...(req.jsonMode ? { response_format: { type: "json_object" as const } } : {}),
     };
     const url = `${this.baseUrl}/chat/completions`;
 
     let lastError: unknown;
+    let formatDowngraded = false;
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       const combined = AbortSignal.any([signal, AbortSignal.timeout(this.timeoutMs)]);
       try {
@@ -201,6 +204,17 @@ export class OpenAICompatibleAdapter implements VLMProvider {
           throw new VisionError(ApplicationErrorCode.PROVIDER_AUTH_FAILED, `${this.providerId} 鉴权失败`, {
             http_status: res.status,
           });
+        }
+        // response_format 兼容降级（审查 #7）：部分兼容端点不支持 json_object → 去掉后重试一次
+        if (
+          res.status === 400 &&
+          req.jsonMode &&
+          !formatDowngraded &&
+          payload["response_format"] !== undefined
+        ) {
+          formatDowngraded = true;
+          delete payload["response_format"];
+          continue;
         }
         if (RETRYABLE_STATUS.has(res.status) && attempt < this.maxRetries) {
           await delay(500 * (attempt + 1));
@@ -227,7 +241,16 @@ export class OpenAICompatibleAdapter implements VLMProvider {
           },
         };
       } catch (err) {
-        if (err instanceof VisionError || (err instanceof Error && err.name === "AbortError")) {
+        if (err instanceof VisionError) {
+          throw err;
+        }
+        // 取消/超时区分（审查 #2）：用户取消原样上抛；超时 → PROVIDER_TIMEOUT
+        if (err instanceof Error && err.name === "AbortError") {
+          if (isTimeoutAbort(combined.reason)) {
+            throw new VisionError(ApplicationErrorCode.PROVIDER_TIMEOUT, `${this.providerId} 请求超时`, {
+              timeout_ms: this.timeoutMs,
+            });
+          }
           throw err;
         }
         lastError = err;
@@ -244,6 +267,7 @@ export class OpenAICompatibleAdapter implements VLMProvider {
   }
 }
 
+/** 兼容多种返回形态（审查 #7）：content 为字符串或 content block 数组。 */
 function extractContent(data: unknown): unknown {
   if (typeof data !== "object" || data === null) return undefined;
   const obj = data as Record<string, unknown>;
@@ -251,7 +275,21 @@ function extractContent(data: unknown): unknown {
   if (!Array.isArray(choices) || choices.length === 0) return undefined;
   const first = choices[0] as Record<string, unknown> | undefined;
   const message = first?.["message"] as Record<string, unknown> | undefined;
-  return message?.["content"];
+  const content = message?.["content"];
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const block of content) {
+      if (typeof block === "object" && block !== null) {
+        const b = block as Record<string, unknown>;
+        if (b["type"] === "text" && typeof b["text"] === "string") {
+          parts.push(b["text"]);
+        }
+      }
+    }
+    return parts.length > 0 ? parts.join("\n") : undefined;
+  }
+  return undefined;
 }
 
 function isBboxJson(text: string): boolean {

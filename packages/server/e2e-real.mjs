@@ -5,6 +5,7 @@
  * 安全约定：key 只经环境变量注入，绝不写盘/入库；无 key 时脚本直接退出。
  * 免费层注意：probe(3 次) + 各工具执行 ≈ 7 次 API 调用，请控制频率。
  */
+import { fileURLToPath } from "node:url";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { makeDetectImage } from "./e2e/png-utils.mjs";
@@ -14,6 +15,9 @@ if (!key) {
   console.error("[e2e-real] 需要 AGNES_API_KEY 环境变量（仅测试用，不落盘）");
   process.exit(2);
 }
+
+// 绝对路径（审查 #3）：不依赖调用方 cwd
+const serverEntry = fileURLToPath(new URL("./lib/index.js", import.meta.url));
 
 let failed = 0;
 const assert = (cond, msg) => {
@@ -27,7 +31,7 @@ const assert = (cond, msg) => {
 
 const transport = new StdioClientTransport({
   command: process.execPath,
-  args: ["lib/index.js"],
+  args: [serverEntry],
   env: { ...process.env }, // 透传（含 AGNES_API_KEY）；启动时真实能力探针
 });
 const client = new Client({ name: "e2e-real", version: "0.0.1" });

@@ -31,4 +31,5 @@ jobs:
         # 无 AGNES_API_KEY 时，真实 API 用例自动跳过（describe.runIf）
         run: pnpm -r run test
       - name: Stdio smoke (no key, graceful degradation)
-        run: node packages/server/stdio-smoke.mjs
+        run: node stdio-smoke.mjs
+        working-directory: packages/server

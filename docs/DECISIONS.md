@@ -50,6 +50,20 @@ Frozen Contract 不可在此变更；新问题必须归类为五类之一：
 | SDK 资源回调签名 | `registerResource` 模板回调为 `(uri: URL, variables, extra)`，非 request 对象 |
 | 无 key 优雅降级 | AGNES_API_KEY 缺失时服务器照常启动；observe 返回"不可执行 + 约束保留"评估事实（非错误） |
 
+## 外部审查修复记录（2026 一次只读审查，9 项全部处置）
+
+| # | 问题 | 处置 |
+|---|---|---|
+| 1 | operation.cancel 不中止执行，取消变 VISION_INTERNAL | 修复：in-flight 映射（operation_id → CancellationTokenSource），cancel 工具先 abort 再落状态；finish 幂等化（终态直接返回现有记录）；新增真实中止测试 |
+| 2 | 超时与取消混淆 | 修复：`isTimeoutAbort`（AbortSignal.timeout reason 判定）；Fetch Boundary 超时 → SECURITY_URI_DENIED(reason=timeout)，Adapter 超时 → PROVIDER_TIMEOUT（该错误码首次被使用）；用户取消原样上抛 |
+| 3 | CI 根目录跑 stdio 冒烟 MODULE_NOT_FOUND | 修复：脚本改绝对路径（fileURLToPath）+ workflow 加 working-directory |
+| 4 | idempotentHint: true 与实现不一致 | 修复：observe/detect/ocr 标 false；幂等保证只来自显式 operation_id |
+| 5 | closed Session 仍可用 | 修复：新增 SESSION_CLOSED；执行类操作拒绝 closed，读取保留证据（session.get/重复 delete）允许（allowClosed）；重复 delete 幂等 |
+| 6 | 结构化结果不按契约校验 | 修复：graph.commitObservation 入库前 Observation.safeParse（Commit Boundary 前置校验）；detect 要求 bbox 合法（坐标序+图像边界），observe 模式非法 bbox 降级 full_image；confidence 超界置 null |
+| 7 | content 数组/response_format 覆盖不足 | 修复：extractContent 支持 content block 数组；jsonMode 携带 response_format，400 时降级重试一次 |
+| 8 | Registry 无 TTL + 串行探针 | 修复：启动探针并行（Promise.all）；新增 VISION_PROBE_INTERVAL_HOURS（默认 24h，0=关闭）定时刷新，unref 不阻塞退出 |
+| 9 | 输入边界边缘问题 | 部分修复：非法 URI → VISION_INVALID_IMAGE_INPUT；inline 解码后字节复查；参数身份最小语义归一（URI WHATWG 归一、MIME 小写去参数）；完整语义等价规范化（默认值/数值形式）记为已知限制；InMemory 事务不回滚由 SQLite(:memory:) 真实事务测试覆盖 |
+
 ## 待办决策（不阻塞 V1 当前进度）
 
 - 并发/限流：令牌桶参数（vision-interface 实现时定）

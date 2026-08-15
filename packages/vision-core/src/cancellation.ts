@@ -42,3 +42,8 @@ export class OperationCancelledError extends Error {
 export function isOperationCancelled(err: unknown): err is OperationCancelledError {
   return err instanceof OperationCancelledError;
 }
+
+/** 超时中止判定：AbortSignal.timeout() 的 reason 是 DOMException TimeoutError。 */
+export function isTimeoutAbort(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "TimeoutError";
+}

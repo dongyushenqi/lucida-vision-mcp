@@ -42,6 +42,34 @@ describe("operationParameterIdentity（规格五.2）", () => {
     );
   });
 
+  it("URI 语义等价（审查 #9 最小归一化）：路径点段/host 大小写归一", () => {
+    const a = {
+      image_input: { type: "uri", uri: "HTTPS://EXAMPLE.com/a.png" },
+      instruction: "x",
+    };
+    const b = {
+      image_input: { type: "uri", uri: "https://example.com/./a.png" },
+      instruction: "x",
+    };
+    expect(operationParameterIdentity("vision.observe", a)).toBe(
+      operationParameterIdentity("vision.observe", b),
+    );
+  });
+
+  it("inline MIME 大小写/参数归一（审查 #9 最小归一化）", () => {
+    const a = {
+      image_input: { type: "inline", inline: { mime_type: "image/PNG", blob: "AA==" } },
+      instruction: "x",
+    };
+    const b = {
+      image_input: { type: "inline", inline: { mime_type: "image/png; charset=utf-8", blob: "AA==" } },
+      instruction: "x",
+    };
+    expect(operationParameterIdentity("vision.observe", a)).toBe(
+      operationParameterIdentity("vision.observe", b),
+    );
+  });
+
   it("忽略协议/追踪/认证元数据与 operation_id（请求身份非操作参数）", () => {
     const withTrace = {
       ...base,

@@ -66,21 +66,46 @@ export async function createServer(config: ServerConfig) {
     core.capabilities.register(provider.declare());
   }
 
+  // 启动探针：并行执行（审查 #8：慢 Provider 不再串行拖累其他 Provider 与启动）
   if (config.probeOnBoot) {
-    for (const provider of providers) {
-      // Probe 副作用边界：结果仅更新 Capability Registry，绝不产生 Observation（规格三.2）
-      try {
-        const verified = await provider.probe(AbortSignal.timeout(config.probeTimeoutMs));
-        core.capabilities.verify(verified);
-        process.stderr.write(
-          `[mcp-vision] probe ok: provider=${provider.providerId} verified=${verified.capabilities.join(",") || "(none)"}\n`,
-        );
-      } catch {
-        process.stderr.write(
-          `[mcp-vision] probe failed: provider=${provider.providerId}（保持未验证，工具将如实报告不可执行）\n`,
-        );
+    await Promise.all(
+      providers.map(async (provider) => {
+        // Probe 副作用边界：结果仅更新 Capability Registry，绝不产生 Observation（规格三.2）
+        try {
+          const verified = await provider.probe(AbortSignal.timeout(config.probeTimeoutMs));
+          core.capabilities.verify(verified);
+          process.stderr.write(
+            `[mcp-vision] probe ok: provider=${provider.providerId} verified=${verified.capabilities.join(",") || "(none)"}\n`,
+          );
+        } catch {
+          process.stderr.write(
+            `[mcp-vision] probe failed: provider=${provider.providerId}（保持未验证，工具将如实报告不可执行）\n`,
+          );
+        }
+      }),
+    );
+  }
+  // 能力 TTL 刷新（审查 #8）：按 VISION_PROBE_INTERVAL_HOURS（默认 24h，0=关闭）定时重探，
+  // unref() 不阻塞进程退出；结果只进 Registry。
+  if (config.probeOnBoot && config.probeIntervalHours > 0) {
+    const timer = setInterval(() => {
+      for (const provider of providers) {
+        provider
+          .probe(AbortSignal.timeout(config.probeTimeoutMs))
+          .then((verified) => {
+            core.capabilities.verify(verified);
+            process.stderr.write(
+              `[mcp-vision] probe refresh: provider=${provider.providerId} verified=${verified.capabilities.join(",") || "(none)"}\n`,
+            );
+          })
+          .catch(() => {
+            process.stderr.write(
+              `[mcp-vision] probe refresh failed: provider=${provider.providerId}（保留旧能力结论）\n`,
+            );
+          });
       }
-    }
+    }, config.probeIntervalHours * 3600_000);
+    timer.unref();
   }
   if (providers.length === 0) {
     process.stderr.write(

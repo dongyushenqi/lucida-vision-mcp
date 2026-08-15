@@ -159,4 +159,72 @@ describe("OpenAICompatibleAdapter：多厂商通用性", () => {
       adapter.execute({ images: [], instruction: "x", jsonMode: false }, ac.signal),
     ).rejects.toThrow();
   });
+
+  it("content 为 content block 数组时拼接 text（审查 #7）", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: [{ type: "text", text: "第一段" }, { type: "text", text: "第二段" }] } }],
+        }),
+        { status: 200 },
+      ),
+    );
+    const adapter = makeAdapter({}, fetchImpl as unknown as typeof fetch);
+    const r = await adapter.execute(
+      { images: [], instruction: "x", jsonMode: false },
+      new AbortController().signal,
+    );
+    expect(r.text).toBe("第一段\n第二段");
+  });
+
+  it("jsonMode 携带 response_format；400 时降级重试一次（审查 #7）", async () => {
+    const calls: Array<Record<string, unknown>> = [];
+    const fetchImpl = vi
+      .fn()
+      .mockImplementationOnce(async (url: string, init: RequestInit) => {
+        calls.push(JSON.parse(init.body as string));
+        return new Response("bad request", { status: 400 });
+      })
+      .mockImplementationOnce(async (url: string, init: RequestInit) => {
+        calls.push(JSON.parse(init.body as string));
+        return okResponse('{"objects":[]}');
+      });
+    const adapter = makeAdapter({}, fetchImpl as unknown as typeof fetch);
+    const r = await adapter.execute(
+      { images: [], instruction: "x", jsonMode: true },
+      new AbortController().signal,
+    );
+    expect(r.text).toBe('{"objects":[]}');
+    expect(calls[0]!["response_format"]).toEqual({ type: "json_object" });
+    expect(calls[1]!["response_format"]).toBeUndefined();
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("超时 → PROVIDER_TIMEOUT（审查 #2：与用户取消区分）", async () => {
+    const fetchImpl = vi.fn((_url: string, init: RequestInit) => {
+      return new Promise<never>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+      });
+    });
+    const adapter = makeAdapter({ timeoutMs: 80 }, fetchImpl as unknown as typeof fetch);
+    await expect(
+      adapter.execute({ images: [], instruction: "x", jsonMode: false }, new AbortController().signal),
+    ).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.PROVIDER_TIMEOUT,
+    });
+  });
+
+  it("用户取消原样上抛（AbortError，非 PROVIDER_TIMEOUT）", async () => {
+    const ac = new AbortController();
+    const fetchImpl = vi.fn((_url: string, init: RequestInit) => {
+      return new Promise<never>((_resolve, reject) => {
+        init.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+        ac.abort();
+      });
+    });
+    const adapter = makeAdapter({ timeoutMs: 5000 }, fetchImpl as unknown as typeof fetch);
+    await expect(
+      adapter.execute({ images: [], instruction: "x", jsonMode: false }, ac.signal),
+    ).rejects.toMatchObject({ name: "AbortError" });
+  });
 });

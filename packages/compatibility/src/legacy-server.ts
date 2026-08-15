@@ -128,8 +128,9 @@ function toolAnnotations(toolName: string) {
     case "vision.observe":
     case "vision.detect":
     case "vision.ocr":
-      // 声明性提示：实现级幂等由 operation_id 机制保证（规格五.2）
-      return { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
+      // 审查 #4：不带 operation_id 时每次都是新执行，不承诺幂等 → false；
+      // 幂等保证只来自调用方显式传 operation_id（规格五.2）
+      return { readOnlyHint: false, destructiveHint: false, idempotentHint: false };
     case "vision.operation.cancel":
       return { readOnlyHint: false, destructiveHint: false, idempotentHint: true };
     default:

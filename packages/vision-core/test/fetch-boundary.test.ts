@@ -99,6 +99,25 @@ describe("FetchBoundary inline 校验（规格四.1）", () => {
     });
   });
 
+  it("非法 URI 字符串 → VISION_INVALID_IMAGE_INPUT（审查 #9：不泄漏内部异常）", async () => {
+    await expect(
+      boundary.resolve({ type: "uri", uri: "ht tp://[bad" }),
+    ).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.VISION_INVALID_IMAGE_INPUT,
+    });
+  });
+
+  it("inline 解码后字节复查：估算余量内的超限 payload 被二次拦截（审查 #9）", async () => {
+    // maxInlineBytes=1024：Base64 前置估算允许 ~3 字节余量，解码后复查必须拦住
+    const small = new FetchBoundary({ ...DEFAULT, maxInlineBytes: 1024 });
+    const bytes = Buffer.alloc(1025, 7); // 解码后 1025 > 1024
+    const b64 = bytes.toString("base64");
+    expect(b64.length).toBeLessThanOrEqual(Math.ceil((1024 * 4) / 3) + 4); // 过前置估算
+    await expect(small.validateInline("image/bmp", b64)).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.SECURITY_PAYLOAD_TOO_LARGE,
+    });
+  });
+
   it("resource_ref 不属本边界 → RESOURCE_NOT_FOUND（由接口层授权后 dereference）", async () => {
     await expect(
       boundary.resolve({ type: "resource_ref", resource_ref: "vision://vs_1/art_1" }),

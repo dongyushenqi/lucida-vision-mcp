@@ -38,6 +38,10 @@ export class SessionService {
     if (!s) {
       throw new Error(`session not found: ${sessionId}`);
     }
+    // 已关闭则幂等返回（审查 #5：重复 delete 不报错）
+    if (s.status === "closed") {
+      return s;
+    }
     const closed: VisionSession = { ...s, status: "closed" };
     this.store.updateSession(closed);
     return closed;

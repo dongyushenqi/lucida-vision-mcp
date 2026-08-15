@@ -12,7 +12,7 @@
 import { Agent as HttpAgent } from "node:http";
 import { Agent as HttpsAgent } from "node:https";
 import { ApplicationErrorCode, VisionError, type ImageInput } from "@mcp-vision/contracts";
-import { OperationCancelledError } from "./cancellation.js";
+import { isTimeoutAbort, OperationCancelledError } from "./cancellation.js";
 import { normalizeMimeType, sniffMimeType, SUPPORTED_IMAGE_MIME_TYPES } from "./mime.js";
 import { blockingLookup } from "./net-address.js";
 
@@ -112,7 +112,15 @@ export class FetchBoundary {
 
   /** URI 模式：scheme 白名单 → 授权策略 → 门禁连接 → 重定向校验 → 大小限制 → MIME sniff。 */
   async resolveUri(uri: string, signal?: AbortSignal, authCtx?: UriAuthContext): Promise<FetchedImage> {
-    const u = new URL(uri);
+    let u: URL;
+    try {
+      u = new URL(uri);
+    } catch {
+      // 非法 URI 字符串：事实化错误，绝不泄漏内部异常（审查 #9）
+      throw new VisionError(ApplicationErrorCode.VISION_INVALID_IMAGE_INPUT, "uri 不是合法 URL", {
+        uri,
+      });
+    }
     const scheme = u.protocol.replace(":", "");
     if (!this.config.allowedSchemes.includes(scheme)) {
       throw new VisionError(ApplicationErrorCode.SECURITY_UNSUPPORTED_SCHEME, `不支持的 URI scheme`, {
@@ -142,7 +150,17 @@ export class FetchBoundary {
         } as RequestInit & { agent: (parsed: URL) => unknown };
         res = await fetch(current, init);
       } catch (err) {
-        if (signal?.aborted || (err instanceof Error && err.name === "AbortError")) {
+        // 取消/超时区分（审查 #2）：用户取消 → OperationCancelledError；超时 → 事实化错误
+        if (signal?.aborted) {
+          throw new OperationCancelledError("fetch cancelled");
+        }
+        if (err instanceof Error && err.name === "AbortError") {
+          if (isTimeoutAbort(combined.reason)) {
+            throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, "URI 获取超时", {
+              uri: current.href,
+              reason: "timeout",
+            });
+          }
           throw new OperationCancelledError("fetch cancelled");
         }
         throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, `URI 获取失败`, {
@@ -234,6 +252,13 @@ export class FetchBoundary {
       bytes = base64ToBytes(blobB64);
     } catch {
       throw new VisionError(ApplicationErrorCode.VISION_INVALID_IMAGE_INPUT, "inline payload 非合法 Base64");
+    }
+    // 解码后字节数复查（审查 #9：Base64 长度估算允许约 3 字节余量，双重校验封死）
+    if (bytes.byteLength > this.config.maxInlineBytes) {
+      throw new VisionError(ApplicationErrorCode.SECURITY_PAYLOAD_TOO_LARGE, "inline payload 解码后超限", {
+        max_bytes: this.config.maxInlineBytes,
+        actual_bytes: bytes.byteLength,
+      });
     }
     return validatePayload(bytes, normalizeMimeType(declaredMime), source);
   }

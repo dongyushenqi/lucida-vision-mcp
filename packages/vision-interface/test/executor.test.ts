@@ -8,6 +8,7 @@ import {
 import {
   CancellationTokenSource,
   FetchBoundary,
+  OperationCancelledError,
   VisionCore,
   type ProviderExecuteRequest,
   type ProviderExecuteResult,
@@ -146,7 +147,8 @@ describe("vision.observe（规格三.1 / 四.1）", () => {
   });
 
   it("json_mode + 已验证 structured_detection → 结构化 Observation", async () => {
-    const text = JSON.stringify({ objects: [{ label: "brown_spot", bbox: [1, 2, 3, 4] }] });
+    // 1x1 测试图：bbox 必须是界内合法值 [0,0,0,0]（审查 #6 契约校验）
+    const text = JSON.stringify({ objects: [{ label: "brown_spot", bbox: [0, 0, 0, 0] }] });
     const { executor, sessionId } = await makeEnv({
       verified: ["image_understanding", "structured_detection"],
       text,
@@ -178,7 +180,7 @@ describe("vision.detect / vision.ocr", () => {
   });
 
   it("detect 已验证 → 结构化 Observation", async () => {
-    const text = JSON.stringify({ objects: [{ label: "crack", bbox: [0, 0, 10, 10] }] });
+    const text = JSON.stringify({ objects: [{ label: "crack", bbox: [0, 0, 0, 0] }] });
     const { executor, sessionId } = await makeEnv({ verified: ["structured_detection"], text });
     const r = await call(executor, "vision.detect", OBSERVE_ARGS(sessionId, { labels: ["crack"] }));
     const s = r.result.structured as { observations: Array<{ label: string }> };
@@ -236,6 +238,54 @@ describe("幂等与冲突（规格五.2）", () => {
 });
 
 describe("取消契约（规格二.2）", () => {
+  it("operation.cancel 真实中止 Provider（审查 #1：in-flight 映射 → token.cancel）", async () => {
+    // Provider 执行中监听 abort → 抛 OperationCancelledError（模拟真实中止）
+    const provider = new MockProvider({
+      declared: DECLARED,
+      verified: ["image_understanding"],
+      delayMs: 100_000,
+    });
+    // 覆写 execute：等待 abort
+    const origExecute = provider.execute.bind(provider);
+    provider.execute = async (req, signal) => {
+      await new Promise<never>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(new OperationCancelledError("aborted")));
+      });
+      return origExecute(req, signal);
+    };
+    const core = new VisionCore({
+      store: new InMemoryVisionStore(),
+      fetchBoundary: new FetchBoundary(),
+      providers: [provider],
+    });
+    core.capabilities.register(provider.declare());
+    core.capabilities.verify(await provider.probe());
+    const executor = new VisionExecutor(core);
+    const createRes = await executor.execute({
+      toolName: "vision.session.create",
+      args: {},
+      identity: IDENTITY,
+      cancel: new CancellationTokenSource(),
+    });
+    const sessionId = (createRes.result.structured as { vision_session_id: string }).vision_session_id;
+
+    const running = call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { operation_id: "op_abort" }));
+    await new Promise((r) => setTimeout(r, 30));
+    const cancelRes = await call(executor, "vision.operation.cancel", {
+      vision_session_id: sessionId,
+      operation_id: "op_abort",
+    });
+    expect(cancelRes.result.isError).toBe(false);
+    expect((cancelRes.result.structured as { operation: { status: string } }).operation.status).toBe("cancelled");
+
+    // 原请求：Provider 被真实中止 → cancelled 结果，绝不是 VISION_INTERNAL
+    const r = await running;
+    expect(r.result.isError).toBe(false);
+    const s = r.result.structured as { cancelled: boolean };
+    expect(s.cancelled).toBe(true);
+    expect(r.operation!.status).toBe("cancelled");
+  });
+
   it("取消 → operation cancelled；已 committed 证据保留；取消不是错误", async () => {
     const { executor, sessionId, core } = await makeEnv({ verified: ["image_understanding"], delayMs: 500 });
     const cancel = new CancellationTokenSource();
@@ -391,6 +441,100 @@ describe("参数校验", () => {
     const r = await call(executor, "vision.nonexistent", {});
     const s = r.result.structured as { error: { application_error_code: string } };
     expect(s.error.application_error_code).toBe(ApplicationErrorCode.VISION_TOOL_NOT_FOUND);
+  });
+});
+
+describe("closed Session 语义（审查 #5）", () => {
+  it("delete 后：新执行被拒（SESSION_CLOSED）；读取状态与保留证据仍可", async () => {
+    const { executor, sessionId, core } = await makeEnv({ verified: ["image_understanding"] });
+    await call(executor, "vision.session.delete", { vision_session_id: sessionId });
+
+    // 新执行 → SESSION_CLOSED（isError，非异常）
+    const r = await call(executor, "vision.observe", OBSERVE_ARGS(sessionId));
+    expect(r.result.isError).toBe(true);
+    expect(
+      (r.result.structured as { error: { application_error_code: string } }).error.application_error_code,
+    ).toBe(ApplicationErrorCode.SESSION_CLOSED);
+
+    // operation.get 同样拒绝
+    const og = await call(executor, "vision.operation.get", {
+      vision_session_id: sessionId,
+      operation_id: "whatever",
+    });
+    expect(
+      (og.result.structured as { error: { application_error_code: string } }).error.application_error_code,
+    ).toBe(ApplicationErrorCode.SESSION_CLOSED);
+
+    // session.get 读取允许（allowClosed）
+    const sg = await call(executor, "vision.session.get", { vision_session_id: sessionId });
+    expect(sg.result.isError).toBe(false);
+    expect((sg.result.structured as { status: string }).status).toBe("closed");
+
+    // 保留证据（Artifact）读取允许
+    const art = core.artifacts.storeArtifact(sessionId, Buffer.from(PNG_1PX, "base64"), "image/png");
+    const ref = await call(executor, "vision.observe", {
+      vision_session_id: sessionId,
+      image_input: { type: "resource_ref", resource_ref: art.storage.ref },
+    });
+    expect(ref.result.isError).toBe(true); // 新执行仍被拒（即使 resource_ref 本身可读）
+  });
+
+  it("重复 delete 幂等", async () => {
+    const { executor, sessionId } = await makeEnv();
+    await call(executor, "vision.session.delete", { vision_session_id: sessionId });
+    const again = await call(executor, "vision.session.delete", { vision_session_id: sessionId });
+    expect(again.result.isError).toBe(false);
+  });
+});
+
+describe("结构化结果契约校验（审查 #6）", () => {
+  it("detect：bbox 越出图像边界 → 该项不合格，整体 structured_parse_failed", async () => {
+    const text = JSON.stringify({
+      objects: [{ label: "crack", bbox: [0, 0, 9999, 9999] }],
+    });
+    const { executor, sessionId } = await makeEnv({
+      verified: ["structured_detection"],
+      text,
+    });
+    const r = await call(executor, "vision.detect", OBSERVE_ARGS(sessionId, { labels: ["crack"] }));
+    const s = r.result.structured as {
+      observations: Array<{ label: string; limitations: string[] }>;
+    };
+    expect(s.observations).toHaveLength(1);
+    expect(s.observations[0]!.label).toBe("visual_evidence");
+    expect(s.observations[0]!.limitations).toContain("structured_parse_failed");
+  });
+
+  it("detect：缺 bbox 的对象不合格（不得降级 full_image）", async () => {
+    const text = JSON.stringify({ objects: [{ label: "crack" }] });
+    const { executor, sessionId } = await makeEnv({ verified: ["structured_detection"], text });
+    const r = await call(executor, "vision.detect", OBSERVE_ARGS(sessionId, { labels: ["crack"] }));
+    const s = r.result.structured as { observations: Array<{ limitations: string[] }> };
+    expect(s.observations[0]!.limitations).toContain("structured_parse_failed");
+  });
+
+  it("observe json_mode：无 bbox 允许（降级 full_image）；非法 bbox 降级；confidence 超界置 null", async () => {
+    const text = JSON.stringify({
+      objects: [
+        { label: "spot", confidence: 9.9 },
+        { label: "ok", bbox: [0, 0, 0, 0], confidence: 0.5 },
+        { label: "badbbox", bbox: [5, 5, 1, 1] }, // 坐标序非法 → 降级 full_image
+      ],
+    });
+    const { executor, sessionId } = await makeEnv({
+      verified: ["image_understanding", "structured_detection"],
+      text,
+    });
+    const r = await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { json_mode: true }));
+    const s = r.result.structured as {
+      observations: Array<{ location: { type: string }; confidence: { value: number | null } }>;
+    };
+    expect(s.observations).toHaveLength(3);
+    expect(s.observations[0]!.location.type).toBe("full_image"); // 无 bbox → full_image
+    expect(s.observations[0]!.confidence.value).toBeNull(); // 超界 → null
+    expect(s.observations[1]!.location.type).toBe("bbox");
+    expect(s.observations[1]!.confidence.value).toBe(0.5);
+    expect(s.observations[2]!.location.type).toBe("full_image"); // 非法 bbox → 降级
   });
 });
 

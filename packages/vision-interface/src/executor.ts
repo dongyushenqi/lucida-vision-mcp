@@ -24,6 +24,7 @@ import {
 import {
   genId,
   isOperationCancelled,
+  readImageDimensions,
   type CancellationTokenSource,
   type FetchedImage,
   type VLMProvider,
@@ -87,6 +88,8 @@ interface VisualArgs {
 export class VisionExecutor {
   private readonly sandbox: SessionSandbox;
   private readonly defaultProviderId: string;
+  /** in-flight 取消映射（审查 #1）：operation_id → 执行中的 CancellationTokenSource */
+  private readonly inflight = new Map<string, CancellationTokenSource>();
 
   constructor(
     private readonly core: VisionCore,
@@ -154,7 +157,8 @@ export class VisionExecutor {
   }
 
   private async sessionGet(req: ExecuteRequest, args: z.infer<typeof SessionGetArgs>): Promise<ExecuteResponse> {
-    const session = this.sandbox.authorize(args.vision_session_id, req.identity);
+    // 读取保留证据允许 closed（审查 #5：关闭仅禁止新的执行类操作）
+    const session = this.sandbox.authorize(args.vision_session_id, req.identity, { allowClosed: true });
     return {
       result: this.result({
         vision_session_id: session.vision_session_id,
@@ -167,7 +171,8 @@ export class VisionExecutor {
   }
 
   private async sessionDelete(req: ExecuteRequest, args: z.infer<typeof SessionDeleteArgs>): Promise<ExecuteResponse> {
-    this.sandbox.authorize(args.vision_session_id, req.identity);
+    // 已关闭会话的重复 delete = 幂等 no-op（审查 #5）
+    this.sandbox.authorize(args.vision_session_id, req.identity, { allowClosed: true });
     const session = this.core.sessions.close(args.vision_session_id);
     return {
       result: this.result({
@@ -202,12 +207,17 @@ export class VisionExecutor {
         operation_id: args.operation_id,
       });
     }
+    if (existing.status === "running") {
+      // 审查 #1：先中止底层执行（in-flight 映射 → CancellationTokenSource），再落状态
+      const token = this.inflight.get(args.operation_id);
+      if (token) {
+        token.cancel();
+      }
+      const op = this.core.operations.cancel(args.vision_session_id, args.operation_id);
+      return { result: this.result({ operation: summarizeOperation(op) }), operation: op };
+    }
     // 已终止的 operation 取消 = 幂等 no-op（取消本身不是错误）
-    const op =
-      existing.status === "running"
-        ? this.core.operations.cancel(args.vision_session_id, args.operation_id)
-        : existing;
-    return { result: this.result({ operation: summarizeOperation(op) }), operation: op };
+    return { result: this.result({ operation: summarizeOperation(existing) }), operation: existing };
   }
 
   /* ------------------------------------------------------------ */
@@ -240,6 +250,9 @@ export class VisionExecutor {
     }
 
     try {
+      // in-flight 注册（审查 #1）：operation_id → CancellationTokenSource，供 operation.cancel 中止
+      this.inflight.set(operationId, req.cancel);
+
       // 图像解析：uri/inline 走统一 Fetch Boundary；resource_ref 先授权后 dereference
       const image = await this.resolveImage(args.image_input, sessionId, req.identity, req.cancel.signal);
 
@@ -270,7 +283,7 @@ export class VisionExecutor {
         req.cancel.signal,
       );
 
-      const observations = this.buildObservations(kind, providerResult, provider, operationId, args);
+      const observations = this.buildObservations(kind, providerResult, provider, operationId, args, image);
       const committed = observations.map((o) => this.core.graph.commitObservation(sessionId, o));
 
       const summary = {
@@ -291,7 +304,7 @@ export class VisionExecutor {
           operation: op,
         };
       }
-      // 应用级错误：事实 + 恢复属性，无建议
+      // 应用级错误：事实 + 恢复属性，无建议（finish 已幂等：被 cancel 工具抢先置终态时返回现有记录）
       if (err instanceof VisionError) {
         const op = this.core.operations.finish(sessionId, operationId, {
           status: "failed",
@@ -318,6 +331,8 @@ export class VisionExecutor {
         ),
         operation: op,
       };
+    } finally {
+      this.inflight.delete(operationId);
     }
   }
 
@@ -454,6 +469,7 @@ export class VisionExecutor {
     provider: VLMProvider,
     operationId: string,
     args: VisualArgs,
+    image: FetchedImage,
   ): Observation[] {
     const source: ProviderSource = {
       provider: providerResult.providerMeta.provider,
@@ -474,8 +490,15 @@ export class VisionExecutor {
     };
 
     if (kind === "detect" || (kind === "observe" && args.json_mode === true)) {
-      const structured = parseStructuredObservations(providerResult.text);
-      if (structured) {
+      // 契约校验（审查 #6）：detect 要求 bbox 存在且合法（坐标序 + 图像边界）；
+      // confidence 必须在 0..1；不合格项丢弃，全部不合格 → structured_parse_failed
+      const { width, height } = readImageDimensions(image.bytes, image.mimeType);
+      const structured = parseStructuredObservations(providerResult.text, {
+        requireBbox: kind === "detect",
+        width,
+        height,
+      });
+      if (structured && structured.length > 0) {
         return structured.map((o) =>
           this.toObservation(
             base,
@@ -490,7 +513,7 @@ export class VisionExecutor {
           ),
         );
       }
-      // 结构化解析失败：如实陈述事实，不伪造结构化证据
+      // 结构化解析失败或全部项不合格：如实陈述事实，不伪造结构化证据
       return [
         this.toObservation(
           base,
@@ -576,24 +599,55 @@ interface StructuredObject {
   text?: string;
 }
 
-function parseStructuredObservations(text: string): StructuredObject[] | undefined {
+interface StructuredParseOptions {
+  /** detect：要求每个对象带合法 bbox；observe json_mode：允许无 bbox（降级 full_image） */
+  requireBbox: boolean;
+  /** 图像尺寸（bbox 边界校验） */
+  width: number;
+  height: number;
+}
+
+function parseStructuredObservations(
+  text: string,
+  opts: StructuredParseOptions,
+): StructuredObject[] | undefined {
   try {
     const parsed = JSON.parse(text) as { objects?: unknown };
     if (!Array.isArray(parsed.objects)) return undefined;
     const objects: StructuredObject[] = [];
     for (const o of parsed.objects) {
-      if (typeof o !== "object" || o === null) return undefined;
+      if (typeof o !== "object" || o === null) continue;
       const rec = o as Record<string, unknown>;
-      if (typeof rec.label !== "string" || rec.label.length === 0) return undefined;
+      if (typeof rec.label !== "string" || rec.label.length === 0) continue;
       const item: StructuredObject = { label: rec.label };
+      // bbox 校验：4 个数、坐标序合法（x1<=x2, y1<=y2）、不越图像边界
       if (Array.isArray(rec.bbox) && rec.bbox.length === 4 && rec.bbox.every((n) => typeof n === "number")) {
-        item.bbox = rec.bbox as [number, number, number, number];
+        const [x1, y1, x2, y2] = rec.bbox as [number, number, number, number];
+        const valid =
+          Number.isFinite(x1) && Number.isFinite(y1) && Number.isFinite(x2) && Number.isFinite(y2) &&
+          x1 <= x2 && y1 <= y2 &&
+          x1 >= 0 && y1 >= 0 &&
+          (opts.width <= 0 || x2 <= opts.width) && (opts.height <= 0 || y2 <= opts.height);
+        if (valid) {
+          item.bbox = [x1, y1, x2, y2];
+        } else if (opts.requireBbox) {
+          // detect 契约：bbox 缺失/非法 → 该项不合格
+          continue;
+        }
+        // 非 requireBbox（observe json_mode）：非法 bbox 视为无 bbox（降级 full_image）
+      } else if (opts.requireBbox) {
+        continue;
       }
-      if (typeof rec.confidence === "number") item.confidence = rec.confidence;
+      // confidence 契约：0..1 之外视为无效（置 null + limitation 由上层处理）
+      if (typeof rec.confidence === "number") {
+        if (rec.confidence >= 0 && rec.confidence <= 1) {
+          item.confidence = rec.confidence;
+        }
+      }
       if (typeof rec.text === "string") item.text = rec.text;
       objects.push(item);
     }
-    return objects;
+    return objects.length > 0 ? objects : undefined;
   } catch {
     return undefined;
   }

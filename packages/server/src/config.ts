@@ -26,6 +26,8 @@ export interface ServerConfig {
   probeOnBoot: boolean;
   /** 探针总超时（ms） */
   probeTimeoutMs: number;
+  /** 能力探针 TTL 刷新间隔（小时；0 = 关闭定时刷新，审查 #8） */
+  probeIntervalHours: number;
   /** URI 授权边界：允许的图像来源域名（空 = 仅 SSRF 防护，规格四.1） */
   allowedUriOrigins: string[];
 }
@@ -45,6 +47,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     providers: parseProviders(env["VISION_PROVIDERS_JSON"]),
     probeOnBoot: env["VISION_PROBE_ON_BOOT"] !== "false",
     probeTimeoutMs: 60_000,
+    probeIntervalHours: parseNonNegativeInt(env["VISION_PROBE_INTERVAL_HOURS"], 24),
     allowedUriOrigins: (env["VISION_ALLOWED_URI_ORIGINS"] ?? "")
       .split(",")
       .map((s) => s.trim())
@@ -79,4 +82,10 @@ export function parseProviders(raw: string | undefined): ProviderConfig[] {
   } catch {
     return [];
   }
+}
+
+function parseNonNegativeInt(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 0 ? n : fallback;
 }
