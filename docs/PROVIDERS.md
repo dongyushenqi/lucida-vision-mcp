@@ -29,6 +29,22 @@ VISION_PROVIDERS_JSON='[
 启动后系统会对**每家**自动跑能力探针（理解/OCR/结构化检测各一次），
 每家"声称能干"和"实际能干"分开记录——没通过探针的能力，工具会如实报告不可执行，绝不假装能干。
 
+### 没有各家 key 时，怎么验证"第二家"真实跑通？
+
+本地免费方案：**Ollama**（开源，OpenAI 兼容端点 `/v1`，可跑 qwen 系列视觉模型）。
+装好 Ollama 并拉取视觉模型（如 `ollama pull qwen2.5vl`）后：
+
+```bash
+VISION_PROVIDERS_JSON='[
+  {"providerId":"ollama","apiKey":"ollama","baseUrl":"http://127.0.0.1:11434/v1","model":"qwen2.5vl","displayName":"本地 Ollama"}
+]' node lib/index.js
+```
+
+这样 Agnes（远程真实）+ Ollama（本地真实）双 Provider 并存，可完整验证
+"多厂商装配、各自探针、provider_id 显式选择"的真实链路，全程不花一分钱、不需要任何云端 key。
+（注意：`http://127.0.0.1` 是 Fetch Boundary 的 SSRF 拦截范围——它拦的是**服务端去取图**，
+Ollama 作为 Provider 的 baseUrl 不经过 Fetch Boundary，不受影响。）
+
 ## 第二类：非主流协议 —— 写一个适配器类
 
 协议形态不兼容 OpenAI 的 AI（如 Anthropic 原生 Messages、Gemini 原生 generateContent），
