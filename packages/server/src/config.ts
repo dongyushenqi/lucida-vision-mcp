@@ -72,8 +72,11 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
   };
 }
 
-/** 解析 scheme 白名单（逗号分隔；只接受合法 scheme 形态，非法项剔除，全非法则回退默认）。 */
-function parseSchemes(raw: string | undefined, fallback = ["http", "https"]): string[] {
+/**
+ * 解析 scheme 白名单（逗号分隔；只接受合法 scheme 形态，非法项剔除，全非法则回退默认）。
+ * 默认含 file：本地 stdio 单机场景开箱即用；严格环境显式设置（如 http,https）可关闭。
+ */
+function parseSchemes(raw: string | undefined, fallback = ["http", "https", "file"]): string[] {
   if (!raw) return fallback;
   const out = raw
     .split(",")

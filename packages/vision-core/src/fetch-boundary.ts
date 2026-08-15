@@ -72,7 +72,10 @@ export const DEFAULT_FETCH_BOUNDARY_CONFIG: FetchBoundaryConfig = {
   maxUriBytes: 10 * 1024 * 1024,
   timeoutMs: 30_000,
   maxRedirects: 5,
-  allowedSchemes: ["http", "https"],
+  // file:// 默认放行：stdio 本地单机信任模型，本地进程本可读任意文件，
+  // 且 file:// 仅放行通过 MIME sniff 的图像文件；严格环境可经
+  // VISION_ALLOW_URI_SCHEMES 显式收窄（如 http,https）。
+  allowedSchemes: ["http", "https", "file"],
 };
 
 export interface FetchedImage {

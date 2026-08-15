@@ -121,7 +121,7 @@ describe("FetchBoundary inline 校验（规格四.1）", () => {
   });
 
   it("uri 模式：不支持的 scheme → SECURITY_UNSUPPORTED_SCHEME", async () => {
-    await expect(boundary.resolve({ type: "uri", uri: "file:///etc/passwd" })).rejects.toMatchObject({
+    await expect(boundary.resolve({ type: "uri", uri: "ftp://example.com/x.png" })).rejects.toMatchObject({
       applicationErrorCode: ApplicationErrorCode.SECURITY_UNSUPPORTED_SCHEME,
     });
   });
@@ -168,8 +168,16 @@ describe("FetchBoundary file:// 本地取图（须显式开启 scheme 白名单�
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it("默认白名单（http,https）拒绝 file:// → SECURITY_UNSUPPORTED_SCHEME", async () => {
+  it("默认白名单含 file：本地文件开箱即用", async () => {
     const boundary = new FetchBoundary();
+    const file = join(dir, "a.png");
+    writeFileSync(file, pngBytes);
+    const img = await boundary.resolve({ type: "uri", uri: pathToFileURL(file).href });
+    expect(img.mimeType).toBe("image/png");
+  });
+
+  it("显式收窄白名单（不含 file）→ file:// 拒绝 → SECURITY_UNSUPPORTED_SCHEME", async () => {
+    const boundary = new FetchBoundary({ ...DEFAULT, allowedSchemes: ["http", "https"] });
     const file = join(dir, "a.png");
     writeFileSync(file, pngBytes);
     await expect(boundary.resolve({ type: "uri", uri: pathToFileURL(file).href })).rejects.toMatchObject({

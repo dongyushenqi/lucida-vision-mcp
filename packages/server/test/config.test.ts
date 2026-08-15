@@ -58,19 +58,20 @@ describe("Server 配置", () => {
     expect(loadConfig({ VISION_MAX_INLINE_BYTES: "abc" }).maxInlineBytes).toBe(10 * 1024 * 1024);
   });
 
-  it("URI scheme 白名单：默认 http,https；显式开启可含 file；非法项剔除", () => {
-    expect(loadConfig({}).allowedUriSchemes).toEqual(["http", "https"]);
+  it("URI scheme 白名单：默认 http,https,file；可显式覆盖（含收窄）；非法项剔除", () => {
+    expect(loadConfig({}).allowedUriSchemes).toEqual(["http", "https", "file"]);
     expect(loadConfig({ VISION_ALLOW_URI_SCHEMES: "http,https,file" }).allowedUriSchemes).toEqual([
       "http",
       "https",
       "file",
     ]);
+    expect(loadConfig({ VISION_ALLOW_URI_SCHEMES: "http,https" }).allowedUriSchemes).toEqual(["http", "https"]);
     expect(loadConfig({ VISION_ALLOW_URI_SCHEMES: "http, hTtPs, bad scheme!, file" }).allowedUriSchemes).toEqual([
       "http",
       "https",
       "file",
     ]);
-    expect(loadConfig({ VISION_ALLOW_URI_SCHEMES: "bad scheme!" }).allowedUriSchemes).toEqual(["http", "https"]);
+    expect(loadConfig({ VISION_ALLOW_URI_SCHEMES: "bad scheme!" }).allowedUriSchemes).toEqual(["http", "https", "file"]);
     expect(loadConfig({ VISION_ALLOW_URI_SCHEMES: "http,http" }).allowedUriSchemes).toEqual(["http"]);
   });
 
