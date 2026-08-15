@@ -56,10 +56,11 @@ export class OpenAICompatibleAdapter implements VLMProvider {
   /** 主流协议族：OpenAI 兼容生态一律走本类，配置即用 */
   readonly protocolFamily = "openai-compatible" as const;
   readonly adapterVersion = "0.2.0";
+  // Contract Clarification：V1 工具契约为单图输入（ImageInput），不声明 multi_image，
+  // 多图观察属 Future Extension——能力声明不撒谎。
   readonly capabilityIds: CapabilityId[] = [
     "image_understanding",
     "ocr",
-    "multi_image",
     "structured_detection",
   ];
 

@@ -2,8 +2,9 @@
  * 真实 Agnes API 全链路 E2E（验收脚本，非单测）。
  *
  * 运行：cd packages/server && AGNES_API_KEY=<key> node e2e-real.mjs
+ * 选项：--skip-probe 跳过启动探针（省 3 次调用；免费层频率保护）
  * 安全约定：key 只经环境变量注入，绝不写盘/入库；无 key 时脚本直接退出。
- * 免费层注意：probe(3 次) + 各工具执行 ≈ 7 次 API 调用，请控制频率。
+ * 免费层注意：默认每次运行 ≈ 7 次 API 调用（probe 3 + 执行 4），请控制频率。
  */
 import { fileURLToPath } from "node:url";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
@@ -15,6 +16,8 @@ if (!key) {
   console.error("[e2e-real] 需要 AGNES_API_KEY 环境变量（仅测试用，不落盘）");
   process.exit(2);
 }
+
+const skipProbe = process.argv.includes("--skip-probe");
 
 // 绝对路径（审查 #3）：不依赖调用方 cwd
 const serverEntry = fileURLToPath(new URL("./lib/index.js", import.meta.url));
@@ -32,7 +35,10 @@ const assert = (cond, msg) => {
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: [serverEntry],
-  env: { ...process.env }, // 透传（含 AGNES_API_KEY）；启动时真实能力探针
+  env: {
+    ...process.env,
+    VISION_PROBE_ON_BOOT: skipProbe ? "false" : "true",
+  },
 });
 const client = new Client({ name: "e2e-real", version: "0.0.1" });
 await client.connect(transport);

@@ -38,6 +38,25 @@ describe("Server 配置", () => {
   it("URI 来源白名单缺省为空（仅 SSRF 防护）", () => {
     expect(loadConfig({}).allowedUriOrigins).toEqual([]);
   });
+
+  it("retention 与 Fetch 大小配置解析（默认值与覆盖）", () => {
+    const def = loadConfig({});
+    expect(def.retentionHours).toEqual({ operations: 168, artifacts: 24 });
+    expect(def.maxInlineBytes).toBe(10 * 1024 * 1024);
+    expect(def.maxUriBytes).toBe(10 * 1024 * 1024);
+
+    const cfg = loadConfig({
+      VISION_RETENTION_OPERATIONS_HOURS: "48",
+      VISION_RETENTION_ARTIFACTS_HOURS: "0",
+      VISION_MAX_INLINE_BYTES: "2048",
+      VISION_MAX_URI_BYTES: "4096",
+    });
+    expect(cfg.retentionHours).toEqual({ operations: 48, artifacts: 0 });
+    expect(cfg.maxInlineBytes).toBe(2048);
+    expect(cfg.maxUriBytes).toBe(4096);
+
+    expect(loadConfig({ VISION_MAX_INLINE_BYTES: "abc" }).maxInlineBytes).toBe(10 * 1024 * 1024);
+  });
 });
 
 describe("VISION_PROVIDERS_JSON（多 Provider 装配）", () => {

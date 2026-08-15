@@ -36,9 +36,20 @@ export interface VisionStore {
   // ---- capability registry ----
   upsertCapability(entry: CapabilityRegistryEntry): void;
   getCapability(provider: string): CapabilityRegistryEntry | undefined;
+  // ---- retention（规格二.3：保留期到期删除/归档属 Implementation Decision；
+  //        整条删除，绝不修改仍被保留数据的身份字段） ----
+  /** 删除 created_at 早于 retentionHours 前的 Operation 记录，返回删除条数 */
+  deleteOperationsOlderThan(retentionHours: number): number;
+  /** 删除 created_at 早于 retentionHours 前的 Artifact 记录，返回删除条数 */
+  deleteArtifactsOlderThan(retentionHours: number): number;
   // ---- tx ----
   transaction<T>(fn: () => T): T;
   close(): void;
+}
+
+/** retention 清理的 cutoff 时间（ISO 8601 UTC；字符串比较对统一 ISO 格式可靠）。 */
+export function retentionCutoff(retentionHours: number): string {
+  return new Date(Date.now() - retentionHours * 3600_000).toISOString();
 }
 
 function parseRow<T>(data: string): T {
@@ -188,6 +199,24 @@ export class SqliteVisionStore implements VisionStore {
     return row ? parseRow<CapabilityRegistryEntry>(row.data) : undefined;
   }
 
+  deleteOperationsOlderThan(retentionHours: number): number {
+    if (retentionHours <= 0) return 0;
+    const cutoff = retentionCutoff(retentionHours);
+    const result = this.db
+      .prepare("DELETE FROM operations WHERE json_extract(data, '$.created_at') < ?")
+      .run(cutoff);
+    return Number(result.changes);
+  }
+
+  deleteArtifactsOlderThan(retentionHours: number): number {
+    if (retentionHours <= 0) return 0;
+    const cutoff = retentionCutoff(retentionHours);
+    const result = this.db
+      .prepare("DELETE FROM artifacts WHERE json_extract(data, '$.created_at') < ?")
+      .run(cutoff);
+    return Number(result.changes);
+  }
+
   transaction<T>(fn: () => T): T {
     this.db.exec("BEGIN");
     try {
@@ -286,6 +315,32 @@ export class InMemoryVisionStore implements VisionStore {
   getCapability(provider: string): CapabilityRegistryEntry | undefined {
     const e = this.capabilities.get(provider);
     return e ? structuredClone(e) : undefined;
+  }
+
+  deleteOperationsOlderThan(retentionHours: number): number {
+    if (retentionHours <= 0) return 0;
+    const cutoff = retentionCutoff(retentionHours);
+    let removed = 0;
+    for (const [key, op] of this.operations) {
+      if (op.created_at < cutoff) {
+        this.operations.delete(key);
+        removed += 1;
+      }
+    }
+    return removed;
+  }
+
+  deleteArtifactsOlderThan(retentionHours: number): number {
+    if (retentionHours <= 0) return 0;
+    const cutoff = retentionCutoff(retentionHours);
+    let removed = 0;
+    for (const [key, e] of this.artifacts) {
+      if (e.artifact.metadata.created_at < cutoff) {
+        this.artifacts.delete(key);
+        removed += 1;
+      }
+    }
+    return removed;
   }
 
   transaction<T>(fn: () => T): T {

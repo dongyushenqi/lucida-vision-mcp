@@ -34,7 +34,7 @@ const pkgJson = {
     "lucida-vision-mcp (eyes, not brain): a standard-MCP visual perception organ that states verifiable visual facts, never diagnoses. 通用视觉感知 MCP 服务器（眼睛不是大脑）",
   type: "module",
   bin: { "lucida-vision-mcp": "./bin/lucida-vision-mcp.mjs" },
-  engines: { node: ">=22.5.0" },
+  engines: { node: ">=24.0.0" },
   files: ["bin"],
   keywords: ["mcp", "vision", "vlm", "visual", "model-context-protocol", "server", "ocr", "detect"],
   license: "MIT",

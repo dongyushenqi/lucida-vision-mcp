@@ -28,8 +28,13 @@ export interface ServerConfig {
   probeTimeoutMs: number;
   /** 能力探针 TTL 刷新间隔（小时；0 = 关闭定时刷新，审查 #8） */
   probeIntervalHours: number;
+  /** retention 保留期（小时；0 = 关闭自动清理；规格二.3 Implementation Decision） */
+  retentionHours: { operations: number; artifacts: number };
   /** URI 授权边界：允许的图像来源域名（空 = 仅 SSRF 防护，规格四.1） */
   allowedUriOrigins: string[];
+  /** Fetch Boundary 大小限制（字节） */
+  maxInlineBytes: number;
+  maxUriBytes: number;
 }
 
 export function loadConfig(env: Record<string, string | undefined> = process.env): ServerConfig {
@@ -48,11 +53,23 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     probeOnBoot: env["VISION_PROBE_ON_BOOT"] !== "false",
     probeTimeoutMs: 60_000,
     probeIntervalHours: parseNonNegativeInt(env["VISION_PROBE_INTERVAL_HOURS"], 24),
+    retentionHours: {
+      operations: parseNonNegativeInt(env["VISION_RETENTION_OPERATIONS_HOURS"], 168),
+      artifacts: parseNonNegativeInt(env["VISION_RETENTION_ARTIFACTS_HOURS"], 24),
+    },
     allowedUriOrigins: (env["VISION_ALLOWED_URI_ORIGINS"] ?? "")
       .split(",")
       .map((s) => s.trim())
       .filter((s) => s.length > 0),
+    maxInlineBytes: parsePositiveInt(env["VISION_MAX_INLINE_BYTES"], 10 * 1024 * 1024),
+    maxUriBytes: parsePositiveInt(env["VISION_MAX_URI_BYTES"], 10 * 1024 * 1024),
   };
+}
+
+function parsePositiveInt(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const n = Number(raw);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
 }
 
 /**

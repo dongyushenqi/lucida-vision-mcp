@@ -29,6 +29,10 @@ jobs:
         run: pnpm -r run build
       - name: Package release bundle
         run: node scripts/build-release.mjs
+      - name: Verify release bundle (MCP handshake)
+        # 发布自检：坏包不上架
+        run: node e2e/verify-release.mjs
+        working-directory: packages/server
       - name: Package source archive
         # 源码包 = 仓库快照（不含 node_modules / lib / .git）
         run: git archive --format=zip -o dist/lucida-vision-mcp-source.zip HEAD

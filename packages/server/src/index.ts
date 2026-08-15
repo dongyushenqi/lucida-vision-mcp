@@ -32,6 +32,14 @@ export async function createServer(config: ServerConfig) {
   // - VISION_PROVIDERS_JSON 为用户显式配置，按配置顺序注册（首位即 provider_id 缺省选择）；
   // - AGNES_API_KEY（AGNES_* env）仅为向后兼容的快捷配置，追加在用户配置之后，无任何优先地位；
   // - 模型用谁、用什么，完全取决于用户接入；本系统绝不设定默认模型。
+  // - 重复 providerId 启动即报错（避免静默吞配置）。
+  const seenProviderIds = new Set<string>();
+  for (const p of config.providers) {
+    if (seenProviderIds.has(p.providerId)) {
+      throw new Error(`VISION_PROVIDERS_JSON: 重复的 providerId "${p.providerId}"`);
+    }
+    seenProviderIds.add(p.providerId);
+  }
   const providers: VLMProvider[] = config.providers.map(
     (p) =>
       new OpenAICompatibleAdapter({
@@ -56,6 +64,8 @@ export async function createServer(config: ServerConfig) {
     store,
     fetchBoundary: new FetchBoundary({
       ...DEFAULT_FETCH_BOUNDARY_CONFIG,
+      maxInlineBytes: config.maxInlineBytes,
+      maxUriBytes: config.maxUriBytes,
       ...(config.allowedUriOrigins.length > 0
         ? { uriPolicy: { allowedOrigins: config.allowedUriOrigins } }
         : {}),
@@ -112,6 +122,29 @@ export async function createServer(config: ServerConfig) {
     }, config.probeIntervalHours * 3600_000);
     timer.unref();
   }
+
+  // retention 自动清理（规格二.3 Implementation Decision）：
+  // 整条删除过期记录，绝不修改仍被保留数据的身份字段；0 = 关闭。
+  if (config.retentionHours.operations > 0 || config.retentionHours.artifacts > 0) {
+    const retentionTimer = setInterval(() => {
+      try {
+        if (config.retentionHours.operations > 0) {
+          const n = store.deleteOperationsOlderThan(config.retentionHours.operations);
+          if (n > 0) process.stderr.write(`[mcp-vision] retention: 清理 Operation ${n} 条\n`);
+        }
+        if (config.retentionHours.artifacts > 0) {
+          const n = store.deleteArtifactsOlderThan(config.retentionHours.artifacts);
+          if (n > 0) process.stderr.write(`[mcp-vision] retention: 清理 Artifact ${n} 条\n`);
+        }
+      } catch (err) {
+        process.stderr.write(
+          `[mcp-vision] retention failed: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
+      }
+    }, 3600_000); // 每小时
+    retentionTimer.unref();
+  }
+
   if (providers.length === 0) {
     process.stderr.write(
       "[mcp-vision] WARN: 未配置任何 Provider（AGNES_API_KEY 或 VISION_PROVIDERS_JSON）；视觉工具将报告 provider 不可执行\n",
