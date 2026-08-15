@@ -1,8 +1,46 @@
-# MCP Vision Server
+# Lucida — MCP Vision Server
+
+**Lucida** (Latin: bright / clear) — to see clearly.
 
 A general-purpose visual perception infrastructure — **eyes, not brain**: it states
 visual facts and limitations only, never outputs domain diagnoses, action suggestions,
 or workflow orchestration. (中文版: [README.md](README.md))
+
+## Project Positioning (Honest Statement)
+
+**Purpose**: provide a standardized "visual perception organ" for AI that has no
+native vision capability (pure text models) — via the standard MCP protocol, images
+are handed to verifiable vision models and returned as **sourced visual evidence**
+(who looked, with which model, at what time), making the act of "seeing" auditable,
+verifiable, and honest.
+
+**What it can do**: probe-verified visual fact statements — image description,
+text extraction (OCR), structured detection (depends on the connected VLM); any
+OpenAI-compatible vision model can be attached (config only); unverified
+capabilities are honestly reported as "not executable".
+
+**Honest boundaries (important)**:
+
+1. **Ceiling = the connected VLM**. This system neither embellishes nor enhances:
+   under equal conditions it does not reach the level of AI with native vision
+   (e.g., GPT-4o / Claude native multimodal) looking at the image directly.
+2. **Not a simple skill**: skills are "prompts + scripts"; this is protocol-level
+   infrastructure — standard MCP protocol, Session/Operation/Observation domain
+   model, capability probes, Provenance audit, idempotency & cancellation
+   contracts, SSRF/authorization security boundaries, schema versioning, 122+
+   automated tests.
+3. **Different from typical vision MCPs**: capability probes (declared ∩ verified),
+   per-observation immutable provenance (model version + timestamp), server-side
+   image fetching protected by SSRF + origin policy, cancellation never destroys
+   committed evidence.
+4. **Lightweight production-grade**: engineering standards usable directly by
+   individuals/small teams (tests, 3-platform CI, error-code system, audit,
+   security boundaries, npm/zip/source distribution). **Not included**: enterprise
+   features (multi-tenant auth, rate limiting, retention cleanup, distributed
+   deployment) — added on demand.
+5. **Fine-grained recognition**: precision depends on the connected VLM. The
+   default Agnes (free model) is verified for detailed description and OCR;
+   structured detection fails its probe and is honestly reported as "not executable".
 
 ## Installation Options (Important)
 

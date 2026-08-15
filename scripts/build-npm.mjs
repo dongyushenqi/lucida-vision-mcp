@@ -31,7 +31,7 @@ const pkgJson = {
   name: "mcp-vision-srv",
   version,
   description:
-    "MCP Vision Server — a general-purpose visual perception MCP server (eyes, not brain): states visual facts only, never diagnoses. 通用视觉感知 MCP 服务器（眼睛不是大脑）",
+    "Lucida — MCP Vision Server (eyes, not brain): a standard-MCP visual perception organ that states verifiable visual facts, never diagnoses. 通用视觉感知 MCP 服务器（眼睛不是大脑）",
   type: "module",
   bin: { "mcp-vision-server": "./bin/mcp-vision-server.mjs" },
   engines: { node: ">=22.5.0" },

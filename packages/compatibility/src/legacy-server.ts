@@ -40,7 +40,7 @@ export class LegacyFamilyServer {
     this.executor = opts.executor;
     this.identity = opts.identity;
     this.server = new McpServer(
-      { name: opts.serverName ?? "mcp-vision-server", version: opts.serverVersion ?? "0.1.0" },
+      { name: opts.serverName ?? "lucida", version: opts.serverVersion ?? "0.1.0" },
       { capabilities: { tools: {}, resources: {} } },
     );
 

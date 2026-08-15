@@ -1,7 +1,28 @@
-# MCP Vision Server (Release Package)
+# Lucida — MCP Vision Server (Release Package)
+
+**Lucida** (Latin: bright / clear) — to see clearly.
 
 A general-purpose visual perception infrastructure — "eyes, not brain":
 it states visual facts only, never diagnoses, and never makes decisions for you.
+
+## Project Positioning (Honest Statement)
+
+**Purpose**: provide a standardized "visual perception organ" for AI without native
+vision — via the standard MCP protocol, images are handed to verifiable vision models
+and returned as sourced visual evidence (who looked, with which model, at what time),
+making "seeing" auditable, verifiable, and honest.
+
+**Honest boundaries**:
+1. Recognition quality is capped by the connected vision model; under equal
+   conditions it **does not reach the level of AI with native vision** (e.g.,
+   GPT-4o / Claude native multimodal);
+2. Not a simple skill: this is protocol-level infrastructure (standard MCP
+   protocol, domain model, capability probes, audit, idempotency, security);
+3. **Lightweight production-grade**: usable by individuals/small teams; enterprise
+   features (multi-tenant auth, rate limiting, retention cleanup, distributed
+   deployment) are not included;
+4. Fine-grained recognition depends on the connected model; unverified
+   capabilities are honestly reported as "not executable" — never pretended.
 
 ## Platform Support (Important)
 
