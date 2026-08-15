@@ -33,8 +33,19 @@ export interface ProviderExecuteResult {
   };
 }
 
+/**
+ * Provider 协议族（两类分法，对齐用户接入规则）：
+ * - "openai-compatible"：主流协议（OpenAI 兼容 chat/completions 形态）。
+ *   千问/豆包/GPT/Agnes/各类网关同属此类——**一份配置即接入，无需写代码**；
+ * - "native"：非主流协议（Anthropic 原生 Messages、Gemini 原生 generateContent 等）。
+ *   按 VLMProvider 接口单独实现适配器类接入。
+ */
+export type ProviderProtocolFamily = "openai-compatible" | "native";
+
 export interface VLMProvider {
   readonly providerId: string;
+  /** 所属协议族（主流协议一类 / 非主流协议单独设置） */
+  readonly protocolFamily: ProviderProtocolFamily;
   readonly adapterVersion: string;
   /** 声明能力（含 Scope and Constraints） */
   declare(): DeclaredCapability;

@@ -25,6 +25,7 @@ const OTHER_IDENTITY: IdentityContext = { principalId: "p2", tenantId: "t1" };
 
 class MockProvider implements VLMProvider {
   readonly providerId = "mock";
+  readonly protocolFamily = "openai-compatible" as const;
   readonly adapterVersion = "0.1.0";
   readonly capabilityIds: CapabilityId[];
   calls = 0;

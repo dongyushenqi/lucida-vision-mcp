@@ -52,6 +52,8 @@ const RETRYABLE_STATUS = new Set([500, 502, 503]);
 
 export class OpenAICompatibleAdapter implements VLMProvider {
   readonly providerId: string;
+  /** 主流协议族：OpenAI 兼容生态一律走本类，配置即用 */
+  readonly protocolFamily = "openai-compatible" as const;
   readonly adapterVersion = "0.2.0";
   readonly capabilityIds: CapabilityId[] = [
     "image_understanding",

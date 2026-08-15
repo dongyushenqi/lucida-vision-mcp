@@ -24,6 +24,7 @@ const PNG_1PX =
 
 class MockProvider implements VLMProvider {
   readonly providerId = "mock";
+  readonly protocolFamily = "openai-compatible" as const;
   readonly adapterVersion = "0.1.0";
   readonly capabilityIds: CapabilityId[] = ["image_understanding", "structured_detection"];
   calls = 0;

@@ -58,7 +58,10 @@ VISION_PROVIDERS_JSON='[
 各家能力由启动时探针独立验证（Declared ∩ Verified → Effective），
 未验证的能力（如结构化检测）工具会如实报告"不可执行"，绝不撒谎。
 `AGNES_API_KEY` env 为向后兼容的默认 Provider（优先注册）。
-协议形态不兼容的厂商（Anthropic 原生 / Gemini 原生 API）按 `VLMProvider` 接口新增 Adapter 类即可，架构不变。
+
+**两类分法**（接入规则）：主流协议（OpenAI 兼容）→ 配置即用，见上文；
+非主流协议（Anthropic 原生 / Gemini 原生等）→ 按 `VLMProvider` 接口写一个适配器类，
+详见 [docs/PROVIDERS.md](docs/PROVIDERS.md)。
 
 ## 状态
 
