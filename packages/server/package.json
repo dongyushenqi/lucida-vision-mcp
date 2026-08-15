@@ -1,6 +1,6 @@
 {
   "name": "@mcp-vision/server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "main": "./lib/index.js",
@@ -11,7 +11,9 @@
       "default": "./lib/index.js"
     }
   },
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "bin": {
     "lucida-vision-mcp": "./lib/index.js"
   },
