@@ -32,6 +32,10 @@ export interface ServerConfig {
   retentionHours: { operations: number; artifacts: number };
   /** URI 授权边界：允许的图像来源域名（空 = 仅 SSRF 防护，规格四.1） */
   allowedUriOrigins: string[];
+  /** Fetch Boundary URI scheme 白名单（本地取图可显式加 "file"） */
+  allowedUriSchemes: string[];
+  /** 放行私有/环回地址（本地 HTTP serve 图片场景；默认 false，SSRF 防护保持开启） */
+  allowPrivateAddresses: boolean;
   /** Fetch Boundary 大小限制（字节） */
   maxInlineBytes: number;
   maxUriBytes: number;
@@ -61,9 +65,21 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       .split(",")
       .map((s) => s.trim())
       .filter((s) => s.length > 0),
+    allowedUriSchemes: parseSchemes(env["VISION_ALLOW_URI_SCHEMES"]),
+    allowPrivateAddresses: env["VISION_ALLOW_PRIVATE_ADDRESSES"] === "true",
     maxInlineBytes: parsePositiveInt(env["VISION_MAX_INLINE_BYTES"], 10 * 1024 * 1024),
     maxUriBytes: parsePositiveInt(env["VISION_MAX_URI_BYTES"], 10 * 1024 * 1024),
   };
+}
+
+/** 解析 scheme 白名单（逗号分隔；只接受合法 scheme 形态，非法项剔除，全非法则回退默认）。 */
+function parseSchemes(raw: string | undefined, fallback = ["http", "https"]): string[] {
+  if (!raw) return fallback;
+  const out = raw
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => /^[a-z][a-z0-9+.-]*$/.test(s));
+  return out.length > 0 ? [...new Set(out)] : fallback;
 }
 
 function parsePositiveInt(raw: string | undefined, fallback: number): number {

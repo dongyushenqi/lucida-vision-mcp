@@ -71,6 +71,8 @@ export async function createServer(config: ServerConfig) {
       ...DEFAULT_FETCH_BOUNDARY_CONFIG,
       maxInlineBytes: config.maxInlineBytes,
       maxUriBytes: config.maxUriBytes,
+      allowedSchemes: config.allowedUriSchemes,
+      allowPrivateAddresses: config.allowPrivateAddresses,
       ...(config.allowedUriOrigins.length > 0
         ? { uriPolicy: { allowedOrigins: config.allowedUriOrigins } }
         : {}),

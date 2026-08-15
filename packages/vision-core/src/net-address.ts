@@ -49,40 +49,47 @@ export interface ResolvedAddress {
   family: number;
 }
 
-/** 解析并门禁：任一解析结果落入阻断范围即抛错。 */
-export async function resolveAndCheck(hostname: string): Promise<ResolvedAddress[]> {
+/** 解析并门禁：任一解析结果落入阻断范围即抛错。allowPrivate=true 时放行私有/环回地址（本地取图，须显式开启）。 */
+export async function resolveAndCheck(
+  hostname: string,
+  opts?: { allowPrivate?: boolean },
+): Promise<ResolvedAddress[]> {
   const addrs = await lookup(hostname, { all: true });
-  const blocked = addrs.find((a) => isBlockedAddress(a.address));
-  if (blocked) {
-    throw new Error(
-      `SSRF blocked: ${hostname} resolves to blocked address ${blocked.address}`,
-    );
+  if (!opts?.allowPrivate) {
+    const blocked = addrs.find((a) => isBlockedAddress(a.address));
+    if (blocked) {
+      throw new Error(
+        `SSRF blocked: ${hostname} resolves to blocked address ${blocked.address}`,
+      );
+    }
   }
   return addrs.map((a) => ({ address: a.address, family: a.family }));
 }
 
-/**
- * Node http(s).Agent 的 lookup 选项实现：
- * 每一次连接都经 DNS 解析 + 私有地址门禁（消除 DNS 重绑定窗口）。
- */
-export const blockingLookup: LookupFunction = (hostname, options, callback) => {
-  resolveAndCheck(hostname)
-    .then((addrs) => {
-      let filtered = addrs;
-      if (options.family !== undefined) {
-        const familyNum = options.family === "IPv4" ? 4 : options.family === "IPv6" ? 6 : options.family;
-        filtered = addrs.filter((a) => a.family === familyNum);
-      }
-      if (options.all) {
-        callback(null, filtered);
-      } else {
-        const first = filtered[0];
-        if (!first) {
-          callback(new Error(`no addresses for ${hostname}`), "", 0);
-          return;
+/** 构造受私有地址门禁约束的 lookup 函数（allowPrivate 仅本地显式放行场景使用）。 */
+export function createLookup(allowPrivate: boolean): LookupFunction {
+  return (hostname, options, callback) => {
+    resolveAndCheck(hostname, { allowPrivate })
+      .then((addrs) => {
+        let filtered = addrs;
+        if (options.family !== undefined) {
+          const familyNum = options.family === "IPv4" ? 4 : options.family === "IPv6" ? 6 : options.family;
+          filtered = addrs.filter((a) => a.family === familyNum);
         }
-        callback(null, first.address, first.family);
-      }
-    })
-    .catch((err: Error) => callback(err, "", 0));
-};
+        if (options.all) {
+          callback(null, filtered);
+        } else {
+          const first = filtered[0];
+          if (!first) {
+            callback(new Error(`no addresses for ${hostname}`), "", 0);
+            return;
+          }
+          callback(null, first.address, first.family);
+        }
+      })
+      .catch((err: Error) => callback(err, "", 0));
+  };
+}
+
+/** 默认门禁：私有/保留地址一律阻断（SSRF 防护默认开启）。 */
+export const blockingLookup: LookupFunction = createLookup(false);

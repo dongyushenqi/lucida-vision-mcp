@@ -11,10 +11,12 @@
  */
 import { Agent as HttpAgent } from "node:http";
 import { Agent as HttpsAgent } from "node:https";
+import { promises as fsp } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { ApplicationErrorCode, VisionError, type ImageInput } from "@mcp-vision/contracts";
 import { isTimeoutAbort, OperationCancelledError } from "./cancellation.js";
 import { normalizeMimeType, sniffMimeType, SUPPORTED_IMAGE_MIME_TYPES } from "./mime.js";
-import { blockingLookup, resolveAndCheck } from "./net-address.js";
+import { createLookup, resolveAndCheck } from "./net-address.js";
 
 export interface FetchBoundaryConfig {
   /** 可注入 fetch（单测用）；缺省为全局 fetch */
@@ -29,6 +31,8 @@ export interface FetchBoundaryConfig {
   maxRedirects: number;
   /** 允许的 URI scheme */
   allowedSchemes: string[];
+  /** 放行私有/环回地址（本地 HTTP 取图场景；默认关，SSRF 防护默认保持开启） */
+  allowPrivateAddresses?: boolean;
   /**
    * URI 授权边界策略（规格四.1）：
    * SSRF 防护仅解决网络访问安全，不得被视为资源授权机制——
@@ -88,9 +92,10 @@ export class FetchBoundary {
   private readonly fetchImpl: typeof fetch;
 
   constructor(private readonly config: FetchBoundaryConfig = DEFAULT_FETCH_BOUNDARY_CONFIG) {
-    // 每一次连接都经私有地址门禁（DNS 重绑定防护）
-    this.httpAgent = new HttpAgent({ lookup: blockingLookup });
-    this.httpsAgent = new HttpsAgent({ lookup: blockingLookup });
+    // 每一次连接都经私有地址门禁（DNS 重绑定防护）；allowPrivateAddresses 显式开启时放行环回/私有
+    const lookup = createLookup(config.allowPrivateAddresses ?? false);
+    this.httpAgent = new HttpAgent({ lookup });
+    this.httpsAgent = new HttpsAgent({ lookup });
     this.fetchImpl = config.fetchImpl ?? fetch;
   }
 
@@ -108,7 +113,7 @@ export class FetchBoundary {
       case "resource_ref":
         throw new VisionError(
           ApplicationErrorCode.RESOURCE_NOT_FOUND,
-          "resource_ref 须经 Session 授权后由接口层 dereference",
+          "resource_ref 在 V1 未实现：请用 uri（本地文件开启 VISION_ALLOW_URI_SCHEMES=file 后可用 file://）或 inline",
           { resource_ref: input.resource_ref },
         );
     }
@@ -132,6 +137,10 @@ export class FetchBoundary {
         uri,
       });
     }
+    // file:// 本地取图：不走网络，跳过授权策略与 DNS 门禁，直读本地文件（同样过大小与 MIME 校验）
+    if (scheme === "file") {
+      return this.resolveFile(u);
+    }
     // URI 授权边界：依 Principal/Tenant + 资源来源策略判定（SSRF ≠ 授权）
     this.authorizeUri(u, authCtx);
 
@@ -139,7 +148,7 @@ export class FetchBoundary {
     // 未生效（Node 24 runner 实测），fetch 前显式解析主机并阻断私有地址——双保险，
     // agent 继续作为 DNS 重绑定（TOCTOU）兜底。
     try {
-      await resolveAndCheck(u.hostname);
+      await resolveAndCheck(u.hostname, { allowPrivate: this.config.allowPrivateAddresses });
     } catch (err) {
       if (err instanceof Error && err.message.includes("SSRF blocked")) {
         throw new VisionError(ApplicationErrorCode.SECURITY_URI_DENIED, "URI 主机为私有/保留地址", {
@@ -259,6 +268,39 @@ export class FetchBoundary {
       const declared = normalizeMimeType(res.headers.get("content-type") ?? "");
       return validatePayload(bytes, declared, current.href);
     }
+  }
+
+  /** file:// 本地取图：size 前置检查 → 读取 → MIME sniff（与 http 路径同一校验终点）。 */
+  private async resolveFile(u: URL): Promise<FetchedImage> {
+    let path: string;
+    try {
+      path = fileURLToPath(u);
+    } catch {
+      throw new VisionError(ApplicationErrorCode.VISION_INVALID_IMAGE_INPUT, "file URI 路径非法", {
+        uri: u.href,
+      });
+    }
+    let stat;
+    try {
+      stat = await fsp.stat(path);
+    } catch (err) {
+      throw new VisionError(ApplicationErrorCode.RESOURCE_NOT_FOUND, "file URI 文件不可读", {
+        path,
+        cause: err instanceof Error ? err.message : String(err),
+      });
+    }
+    if (stat.isDirectory()) {
+      throw new VisionError(ApplicationErrorCode.RESOURCE_NOT_FOUND, "file URI 指向目录", { path });
+    }
+    if (stat.size > this.config.maxUriBytes) {
+      throw new VisionError(ApplicationErrorCode.SECURITY_PAYLOAD_TOO_LARGE, "本地文件超限", {
+        path,
+        max_bytes: this.config.maxUriBytes,
+      });
+    }
+    const bytes = await fsp.readFile(path);
+    // 声明 MIME 未知（file:// 无 Content-Type）：由 sniff 结果兜底
+    return validatePayload(bytes, "", u.href);
   }
 
   /** URI 授权边界：来源策略 + 授权钩子；SSRF 防护 ≠ 资源授权（规格四.1）。 */

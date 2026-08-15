@@ -57,6 +57,29 @@ describe("Server 配置", () => {
 
     expect(loadConfig({ VISION_MAX_INLINE_BYTES: "abc" }).maxInlineBytes).toBe(10 * 1024 * 1024);
   });
+
+  it("URI scheme 白名单：默认 http,https；显式开启可含 file；非法项剔除", () => {
+    expect(loadConfig({}).allowedUriSchemes).toEqual(["http", "https"]);
+    expect(loadConfig({ VISION_ALLOW_URI_SCHEMES: "http,https,file" }).allowedUriSchemes).toEqual([
+      "http",
+      "https",
+      "file",
+    ]);
+    expect(loadConfig({ VISION_ALLOW_URI_SCHEMES: "http, hTtPs, bad scheme!, file" }).allowedUriSchemes).toEqual([
+      "http",
+      "https",
+      "file",
+    ]);
+    expect(loadConfig({ VISION_ALLOW_URI_SCHEMES: "bad scheme!" }).allowedUriSchemes).toEqual(["http", "https"]);
+    expect(loadConfig({ VISION_ALLOW_URI_SCHEMES: "http,http" }).allowedUriSchemes).toEqual(["http"]);
+  });
+
+  it("私有地址放行开关：缺省关闭；仅显式 'true' 开启", () => {
+    expect(loadConfig({}).allowPrivateAddresses).toBe(false);
+    expect(loadConfig({ VISION_ALLOW_PRIVATE_ADDRESSES: "true" }).allowPrivateAddresses).toBe(true);
+    expect(loadConfig({ VISION_ALLOW_PRIVATE_ADDRESSES: "1" }).allowPrivateAddresses).toBe(false);
+    expect(loadConfig({ VISION_ALLOW_PRIVATE_ADDRESSES: "yes" }).allowPrivateAddresses).toBe(false);
+  });
 });
 
 describe("VISION_PROVIDERS_JSON（多 Provider 装配）", () => {

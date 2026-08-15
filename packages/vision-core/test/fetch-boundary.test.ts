@@ -1,11 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import { createServer } from "node:http";
 import { ApplicationErrorCode } from "@mcp-vision/contracts";
 import {
   DEFAULT_FETCH_BOUNDARY_CONFIG as DEFAULT,
   FetchBoundary,
   isOriginAllowed,
 } from "../src/fetch-boundary.js";
-import { isBlockedAddress } from "../src/net-address.js";
+import { isBlockedAddress, resolveAndCheck } from "../src/net-address.js";
 import { normalizeMimeType, sniffMimeType } from "../src/mime.js";
 
 const PNG_1PX =
@@ -27,6 +32,12 @@ describe("net-address：SSRF 私有地址阻断矩阵（规格四.1）", () => {
     expect(isBlockedAddress("8.8.8.8")).toBe(false);
     expect(isBlockedAddress("1.1.1.1")).toBe(false);
     expect(isBlockedAddress("2606:4700:4700::1111")).toBe(false);
+  });
+
+  it("resolveAndCheck：默认阻断 localhost，allowPrivate=true 时放行", async () => {
+    await expect(resolveAndCheck("localhost")).rejects.toThrow(/SSRF blocked/);
+    const addrs = await resolveAndCheck("localhost", { allowPrivate: true });
+    expect(addrs.length).toBeGreaterThan(0);
   });
 });
 
@@ -134,12 +145,107 @@ describe("FetchBoundary inline 校验（规格四.1）", () => {
     });
   });
 
-  it("resource_ref 不属本边界 → RESOURCE_NOT_FOUND（由接口层授权后 dereference）", async () => {
+  it("resource_ref 在 V1 未实现 → RESOURCE_NOT_FOUND（报错含可用替代指引）", async () => {
     await expect(
       boundary.resolve({ type: "resource_ref", resource_ref: "vision://vs_1/art_1" }),
     ).rejects.toMatchObject({
       applicationErrorCode: ApplicationErrorCode.RESOURCE_NOT_FOUND,
     });
+  });
+});
+
+describe("FetchBoundary file:// 本地取图（须显式开启 scheme 白名单）", () => {
+  const pngBytes = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+    "base64",
+  );
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "lucida-fb-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("默认白名单（http,https）拒绝 file:// → SECURITY_UNSUPPORTED_SCHEME", async () => {
+    const boundary = new FetchBoundary();
+    const file = join(dir, "a.png");
+    writeFileSync(file, pngBytes);
+    await expect(boundary.resolve({ type: "uri", uri: pathToFileURL(file).href })).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.SECURITY_UNSUPPORTED_SCHEME,
+    });
+  });
+
+  it("开启 file scheme 后：读取成功，MIME 由 sniff 兜底", async () => {
+    const boundary = new FetchBoundary({ ...DEFAULT, allowedSchemes: ["http", "https", "file"] });
+    const file = join(dir, "a.png");
+    writeFileSync(file, pngBytes);
+    const img = await boundary.resolve({ type: "uri", uri: pathToFileURL(file).href });
+    expect(img.mimeType).toBe("image/png");
+    expect(img.contentLength).toBe(pngBytes.byteLength);
+  });
+
+  it("文件超过 maxUriBytes → SECURITY_PAYLOAD_TOO_LARGE（读前拦截）", async () => {
+    const boundary = new FetchBoundary({
+      ...DEFAULT,
+      allowedSchemes: ["http", "https", "file"],
+      maxUriBytes: 64,
+    });
+    const file = join(dir, "big.png");
+    writeFileSync(file, pngBytes); // 68 字节 > 64
+    await expect(boundary.resolve({ type: "uri", uri: pathToFileURL(file).href })).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.SECURITY_PAYLOAD_TOO_LARGE,
+    });
+  });
+
+  it("指向目录 → RESOURCE_NOT_FOUND；指向不存在的文件 → RESOURCE_NOT_FOUND", async () => {
+    const boundary = new FetchBoundary({ ...DEFAULT, allowedSchemes: ["http", "https", "file"] });
+    const sub = join(dir, "sub");
+    mkdirSync(sub);
+    await expect(boundary.resolve({ type: "uri", uri: pathToFileURL(sub).href })).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.RESOURCE_NOT_FOUND,
+    });
+    await expect(
+      boundary.resolve({ type: "uri", uri: pathToFileURL(join(dir, "missing.png")).href }),
+    ).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.RESOURCE_NOT_FOUND,
+    });
+  });
+
+  it("非图像本地文件 → VISION_INVALID_IMAGE_INPUT", async () => {
+    const boundary = new FetchBoundary({ ...DEFAULT, allowedSchemes: ["http", "https", "file"] });
+    const file = join(dir, "not-image.txt");
+    writeFileSync(file, "hello world");
+    await expect(boundary.resolve({ type: "uri", uri: pathToFileURL(file).href })).rejects.toMatchObject({
+      applicationErrorCode: ApplicationErrorCode.VISION_INVALID_IMAGE_INPUT,
+    });
+  });
+});
+
+describe("FetchBoundary 私有地址放行开关（VISION_ALLOW_PRIVATE_ADDRESSES）", () => {
+  it("默认阻断 127.0.0.1（已有用例）；allowPrivateAddresses=true 时可从本机 HTTP 取图", async () => {
+    const pngBytes = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+      "base64",
+    );
+    const server = createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "image/png" });
+      res.end(pngBytes);
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const port = (server.address() as { port: number }).port;
+      const boundary = new FetchBoundary({ ...DEFAULT, allowPrivateAddresses: true });
+      const img = await boundary.resolve({
+        type: "uri",
+        uri: `http://127.0.0.1:${port}/x.png`,
+      });
+      expect(img.mimeType).toBe("image/png");
+      expect(img.contentLength).toBe(pngBytes.byteLength);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
   });
 });
 

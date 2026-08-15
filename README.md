@@ -60,6 +60,8 @@ Requires Node.js ≥ 24.
 
 You can also install globally and use the `lucida-vision-mcp` command directly: `npm install -g lucida-vision-mcp`.
 
+> **Local images**: after enabling `VISION_ALLOW_URI_SCHEMES=http,https,file`, you can pass local paths directly as `file:///C:/photos/a.png` — the image bytes never travel through the AI's context. This is the fastest way to process local files.
+
 ### Other install options
 
 - **Release zip** (no environment setup): download `lucida-vision-mcp-vX.Y.Z.zip` from [Releases](https://github.com/dongyushenqi/lucida-vision-mcp/releases), unzip, run `install.cmd` (Windows) or `install.sh` (macOS / Linux). An MCP host config template and bilingual instructions are included.
@@ -95,6 +97,8 @@ Non-OpenAI-compatible protocols (Anthropic / Gemini native APIs, etc.) need one 
 | `VISION_PROBE_ON_BOOT` | `true` | Run capability probes at startup |
 | `VISION_PROBE_INTERVAL_HOURS` | `24` | Probe re-verification interval (hours) |
 | `VISION_ALLOWED_URI_ORIGINS` | empty | Allowlist of origins the server may fetch images from (comma-separated, SSRF protection) |
+| `VISION_ALLOW_URI_SCHEMES` | `http,https` | URI scheme allowlist (comma-separated); add `file` to read local images |
+| `VISION_ALLOW_PRIVATE_ADDRESSES` | `false` | Allow private/loopback addresses (for serving images over local HTTP; SSRF protection stays on by default) |
 | `VISION_MAX_INLINE_BYTES` | `10485760` | Maximum inline image size (bytes) |
 
 ## Capabilities and boundaries
@@ -195,6 +199,8 @@ MIT
 
 也可以全局安装后直接用 `lucida-vision-mcp` 命令：`npm install -g lucida-vision-mcp`。
 
+> **本地图片**：开启 `VISION_ALLOW_URI_SCHEMES=http,https,file` 后，可以直接传 `file:///C:/照片/a.png` 这样的本地路径——图片字节不需要经过 AI 的上下文，这是处理本地文件最快的方式。
+
 ### 其他安装方式
 
 - **发布包**（不想配环境）：从 [Releases](https://github.com/dongyushenqi/lucida-vision-mcp/releases) 下载 `lucida-vision-mcp-vX.Y.Z.zip`，解压后运行 `install.cmd`（Windows）或 `install.sh`（macOS / Linux）。包内有 MCP Host 配置模板和中英双语说明；
@@ -230,6 +236,8 @@ MIT
 | `VISION_PROBE_ON_BOOT` | `true` | 启动时运行能力探针 |
 | `VISION_PROBE_INTERVAL_HOURS` | `24` | 探针复验间隔（小时） |
 | `VISION_ALLOWED_URI_ORIGINS` | 空 | 服务端取图的来源白名单（逗号分隔，SSRF 防护） |
+| `VISION_ALLOW_URI_SCHEMES` | `http,https` | URI scheme 白名单（逗号分隔）；本地取图加 `file` |
+| `VISION_ALLOW_PRIVATE_ADDRESSES` | `false` | 放行私有/环回地址（本机 HTTP 提供图片的场景；SSRF 防护默认保持开启） |
 | `VISION_MAX_INLINE_BYTES` | `10485760` | 内联图像大小上限（字节） |
 
 ## 能力与边界
