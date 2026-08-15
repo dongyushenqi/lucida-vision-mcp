@@ -12,7 +12,7 @@
  * 运行：pnpm -r run build && node scripts/build-npm.mjs
  */
 import { execSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT, bundleServer } from "./lib/bundle-server.mjs";
 
@@ -42,6 +42,11 @@ const pkgJson = {
   publishConfig: { access: "public" },
 };
 writeFileSync(join(npmDir, "package.json"), JSON.stringify(pkgJson, null, 2) + "\n");
+
+const templates = ["LICENSE"];
+for (const t of templates) {
+  copyFileSync(join(ROOT, t), join(npmDir, t));
+}
 
 console.log("[npm] npm pack ...");
 const packOut = execSync("npm pack --pack-destination ../", { cwd: npmDir, encoding: "utf8" });

@@ -202,8 +202,11 @@ export class SqliteVisionStore implements VisionStore {
   deleteOperationsOlderThan(retentionHours: number): number {
     if (retentionHours <= 0) return 0;
     const cutoff = retentionCutoff(retentionHours);
+    // 只清理终态记录：running 中的 Operation 即使超期也保留（审查：避免删后 finish/cancel 变 NOT_FOUND）
     const result = this.db
-      .prepare("DELETE FROM operations WHERE json_extract(data, '$.created_at') < ?")
+      .prepare(
+        "DELETE FROM operations WHERE json_extract(data, '$.status') != 'running' AND json_extract(data, '$.created_at') < ?",
+      )
       .run(cutoff);
     return Number(result.changes);
   }
@@ -322,7 +325,8 @@ export class InMemoryVisionStore implements VisionStore {
     const cutoff = retentionCutoff(retentionHours);
     let removed = 0;
     for (const [key, op] of this.operations) {
-      if (op.created_at < cutoff) {
+      // 只清理终态记录（running 保留，审查同上）
+      if (op.status !== "running" && op.created_at < cutoff) {
         this.operations.delete(key);
         removed += 1;
       }

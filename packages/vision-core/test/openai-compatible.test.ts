@@ -100,6 +100,12 @@ describe("OpenAICompatibleAdapter：多厂商通用性", () => {
     });
   });
 
+  it("declare：max_image_size 从配置计算（审查：与 Server Fetch 上限同步，不写死）", () => {
+    const adapter = makeAdapter({ maxImageSize: 2048 });
+    expect(adapter.declare().constraints.max_image_size).toBe(2048);
+    expect(adapter.declare().constraints.max_images_per_request).toBe(1); // 单图输入诚实声明
+  });
+
   it("成功路径：providerMeta 携带 providerId 与模型标识", async () => {
     const adapter = makeAdapter({});
     const r = await adapter.execute(

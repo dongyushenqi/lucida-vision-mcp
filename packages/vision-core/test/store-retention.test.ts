@@ -59,6 +59,17 @@ describe("retention 自动清理（规格二.3 Implementation Decision）", () =
     store.close();
   });
 
+  it("running 中的超期 Operation 不被删除（审查：避免删后 finish/cancel 变 NOT_FOUND）", () => {
+    const store = makeStore();
+    store.insertOperation({ ...OP("op_running_old", "2026-01-01T00:00:00.000Z"), status: "running" });
+    store.insertOperation(OP("op_done_old", "2026-01-01T00:00:00.000Z"));
+    const removed = store.deleteOperationsOlderThan(7 * 24);
+    expect(removed).toBe(1);
+    expect(store.getOperation("vs_1", "op_running_old")).toBeDefined();
+    expect(store.getOperation("vs_1", "op_done_old")).toBeUndefined();
+    store.close();
+  });
+
   it("Observation 不随 retention 删除（已 committed 证据独立保留，规格二.2）", () => {
     const store = makeStore();
     store.insertOperation(OP("op_old", "2026-01-01T00:00:00.000Z"));

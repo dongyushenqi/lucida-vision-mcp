@@ -40,6 +40,8 @@ export interface OpenAiCompatibleProviderConfig {
   fetchImpl?: typeof fetch;
   /** 供应商特有约束（并入 Declared Capability constraints） */
   extraConstraints?: Record<string, unknown>;
+  /** 单图最大字节数（Declared constraints.max_image_size；应与 Server Fetch 上限一致） */
+  maxImageSize?: number;
 }
 
 /** 1x1 透明 PNG（探针测试图，内容无关）。 */
@@ -72,6 +74,7 @@ export class OpenAICompatibleAdapter implements VLMProvider {
   private readonly temperature: number;
   private readonly fetchImpl: typeof fetch;
   private readonly extraConstraints: Record<string, unknown>;
+  private readonly maxImageSize: number;
 
   constructor(private readonly config: OpenAiCompatibleProviderConfig) {
     if (!config.providerId || !config.providerId.match(/^[a-z0-9_-]+$/)) {
@@ -86,6 +89,7 @@ export class OpenAICompatibleAdapter implements VLMProvider {
     this.temperature = config.temperature ?? 0.2;
     this.fetchImpl = config.fetchImpl ?? fetch;
     this.extraConstraints = config.extraConstraints ?? {};
+    this.maxImageSize = config.maxImageSize ?? 10 * 1024 * 1024;
   }
 
   /** 声明能力（含 Scope and Constraints）。 */
@@ -94,8 +98,9 @@ export class OpenAICompatibleAdapter implements VLMProvider {
       provider: this.providerId,
       capabilities: [...this.capabilityIds],
       constraints: {
-        max_image_size: 10 * 1024 * 1024,
-        max_images_per_request: 4,
+        // max_image_size 与 Server Fetch 上限同步（审查：配置化后声明不得仍写死 10MB）
+        max_image_size: this.maxImageSize,
+        max_images_per_request: 1,
         supported_output_formats: ["text"],
         ...this.extraConstraints,
       },

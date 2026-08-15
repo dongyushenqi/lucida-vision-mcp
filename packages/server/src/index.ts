@@ -26,13 +26,7 @@ import { LegacyFamilyServer } from "@mcp-vision/compatibility";
 import { loadConfig, type ServerConfig } from "./config.js";
 
 export async function createServer(config: ServerConfig) {
-  const store = new SqliteVisionStore(config.dbPath);
-
-  // Provider 装配（模型独立，不预设默认模型）：
-  // - VISION_PROVIDERS_JSON 为用户显式配置，按配置顺序注册（首位即 provider_id 缺省选择）；
-  // - AGNES_API_KEY（AGNES_* env）仅为向后兼容的快捷配置，追加在用户配置之后，无任何优先地位；
-  // - 模型用谁、用什么，完全取决于用户接入；本系统绝不设定默认模型。
-  // - 重复 providerId 启动即报错（避免静默吞配置）。
+  // 重复 providerId 校验必须在开库之前（审查：避免异常路径留下文件句柄/锁）
   const seenProviderIds = new Set<string>();
   for (const p of config.providers) {
     if (seenProviderIds.has(p.providerId)) {
@@ -40,6 +34,13 @@ export async function createServer(config: ServerConfig) {
     }
     seenProviderIds.add(p.providerId);
   }
+
+  const store = new SqliteVisionStore(config.dbPath);
+
+  // Provider 装配（模型独立，不预设默认模型）：
+  // - VISION_PROVIDERS_JSON 为用户显式配置，按配置顺序注册（首位即 provider_id 缺省选择）；
+  // - AGNES_API_KEY（AGNES_* env）仅为向后兼容的快捷配置，追加在用户配置之后，无任何优先地位；
+  // - 模型用谁、用什么，完全取决于用户接入；本系统绝不设定默认模型。
   const providers: VLMProvider[] = config.providers.map(
     (p) =>
       new OpenAICompatibleAdapter({
@@ -48,6 +49,8 @@ export async function createServer(config: ServerConfig) {
         apiKey: p.apiKey,
         baseUrl: p.baseUrl,
         model: p.model,
+        // Declared 约束与 Server Fetch 上限同步（审查：声明不得写死）
+        maxImageSize: config.maxInlineBytes,
       }),
   );
   if (config.agnes.apiKey && !providers.some((p) => p.providerId === "agnes")) {
@@ -56,6 +59,7 @@ export async function createServer(config: ServerConfig) {
         apiKey: config.agnes.apiKey,
         baseUrl: config.agnes.baseUrl,
         model: config.agnes.model,
+        maxImageSize: config.maxInlineBytes,
       }),
     );
   }

@@ -22,6 +22,8 @@ export interface AgnesAdapterConfig {
   temperature?: number;
   /** 可注入 fetch（单测用） */
   fetchImpl?: typeof fetch;
+  /** 单图最大字节数（Declared constraints；应与 Server Fetch 上限一致） */
+  maxImageSize?: number;
 }
 
 export class AgnesAdapter extends OpenAICompatibleAdapter {
@@ -36,6 +38,7 @@ export class AgnesAdapter extends OpenAICompatibleAdapter {
       maxRetries: config.maxRetries,
       temperature: config.temperature,
       fetchImpl: config.fetchImpl,
+      maxImageSize: config.maxImageSize,
       extraConstraints: {
         confidence_supported: false,
         json_mode_supported: true,
