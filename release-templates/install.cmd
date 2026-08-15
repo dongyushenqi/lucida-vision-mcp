@@ -1,6 +1,6 @@
 @echo off
 rem ============================================================
-rem  MCP Vision Server - Windows 环境检查/引导安装
+rem  lucida-vision-mcp - Windows 环境检查/引导安装
 rem  原则：只检测，绝不覆盖你电脑上已有的任何环境。
 rem  没有 Node.js 时才尝试自动安装（winget 官方源），
 rem  装不上则给出官网链接。

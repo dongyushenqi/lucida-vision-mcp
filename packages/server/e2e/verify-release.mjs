@@ -5,7 +5,7 @@
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
-const defaultBundle = new URL("../../../dist/release/bin/mcp-vision-server.mjs", import.meta.url)
+const defaultBundle = new URL("../../../dist/release/bin/lucida-vision-mcp.mjs", import.meta.url)
   .pathname.replace(/^\/([A-Za-z]:)/, "$1");
 const bundle = process.argv[2] ?? defaultBundle;
 

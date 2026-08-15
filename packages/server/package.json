@@ -13,7 +13,7 @@
   },
   "files": ["lib"],
   "bin": {
-    "mcp-vision-server": "./lib/index.js"
+    "lucida-vision-mcp": "./lib/index.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

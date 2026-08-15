@@ -1,4 +1,4 @@
-# Lucida — MCP Vision Server（发布包）
+# lucida-vision-mcp（发布包）
 
 **Lucida**（拉丁语：明亮）—— 清澈地看见。
 
@@ -37,7 +37,7 @@ macOS/Linux 上如遇问题，欢迎反馈（附系统版本与报错信息）�
    ```
 3. **接入 MCP Host**（如 Claude Desktop）：
    - 打开 Host 的 MCP 配置文件，参照 `config/claude-desktop.example.json`，
-     `args` 里的路径改成你解压后的实际路径（`...\bin\mcp-vision-server.mjs`）
+     `args` 里的路径改成你解压后的实际路径（`...\bin\lucida-vision-mcp.mjs`）
    - 重启 Host，即可看到 `vision.*` 系列工具
 
 也可以先直接跑 `start.cmd` 验证服务能启动。
@@ -47,7 +47,7 @@ macOS/Linux 上如遇问题，欢迎反馈（附系统版本与报错信息）�
 1. **检查环境**：终端运行 `./install.sh`（没有 Node 时按提示安装）
 2. **设置密钥**：`export AGNES_API_KEY=你的key`
 3. **接入 MCP Host**：同 Windows 第 3 步，`command: "node"`，`args` 指向
-   `.../bin/mcp-vision-server.mjs`
+   `.../bin/lucida-vision-mcp.mjs`
 
 ## 多厂商支持（模型独立）
 

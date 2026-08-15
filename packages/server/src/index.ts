@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * mcp-vision-server —— 装配壳（Layer 1）。
+ * lucida-vision-mcp —— 装配壳（Layer 1）。
  *
  * 环境变量：
  *   AGNES_API_KEY      必填（Agnes 免费视觉 API）

@@ -19,8 +19,8 @@ const serverPkg = JSON.parse(readFileSync(join(root, "packages/server/package.js
 const version = serverPkg.version;
 
 const releaseDir = join(root, "dist", "release");
-const zipPath = join(root, "dist", `mcp-vision-server-v${version}.zip`);
-const bundleOut = join(releaseDir, "bin", "mcp-vision-server.mjs");
+const zipPath = join(root, "dist", `lucida-vision-mcp-v${version}.zip`);
+const bundleOut = join(releaseDir, "bin", "lucida-vision-mcp.mjs");
 
 rmSync(releaseDir, { recursive: true, force: true });
 mkdirSync(join(releaseDir, "bin"), { recursive: true });
@@ -50,7 +50,7 @@ archive.on("warning", (err) => {
   else throw err;
 });
 archive.pipe(output);
-archive.directory(releaseDir, `mcp-vision-server-v${version}`);
+archive.directory(releaseDir, `lucida-vision-mcp-v${version}`);
 await archive.finalize();
 
 console.log(`[release] done: ${zipPath}`);

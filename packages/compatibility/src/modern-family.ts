@@ -29,7 +29,7 @@ export class ModernFamilyPlaceholder implements ModernFamilyAdapter {
 
   discover(): ModernDiscovery {
     return {
-      server_name: "lucida",
+      server_name: "lucida-vision-mcp",
       server_version: "0.1.0",
       protocol_family: "modern",
       capabilities: { tools: true, resources: true },

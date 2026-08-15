@@ -2,7 +2,7 @@
   "mcpServers": {
     "vision": {
       "command": "node",
-      "args": ["C:/绝对路径/mcp-vision-server/bin/mcp-vision-server.mjs"],
+      "args": ["C:/绝对路径/lucida-vision-mcp/bin/lucida-vision-mcp.mjs"],
       "env": {
         "AGNES_API_KEY": "你的key",
         "VISION_ALLOWED_URI_ORIGINS": ""

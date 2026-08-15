@@ -1,4 +1,4 @@
-# Lucida — MCP Vision Server (Release Package)
+# lucida-vision-mcp (Release Package)
 
 **Lucida** (Latin: bright / clear) — to see clearly.
 
@@ -46,7 +46,7 @@ If you hit an issue on macOS/Linux, please report it with your OS version and th
    ```
 3. **Connect to an MCP host** (e.g., Claude Desktop):
    - Open the host's MCP config file, see `config/claude-desktop.example.json`,
-     and point `args` to your extracted path (`...\bin\mcp-vision-server.mjs`)
+     and point `args` to your extracted path (`...\bin\lucida-vision-mcp.mjs`)
    - Restart the host; the `vision.*` tools will appear
 
 You can also run `start.cmd` directly to verify the server boots.
@@ -56,7 +56,7 @@ You can also run `start.cmd` directly to verify the server boots.
 1. **Check environment**: run `./install.sh` in a terminal (follow the hints if Node is missing)
 2. **Set your API key**: `export AGNES_API_KEY=your-key`
 3. **Connect to an MCP host**: same as Windows step 3 — `command: "node"`,
-   `args` pointing to `.../bin/mcp-vision-server.mjs`
+   `args` pointing to `.../bin/lucida-vision-mcp.mjs`
 
 ## Multi-Provider Support (Model Independence)
 

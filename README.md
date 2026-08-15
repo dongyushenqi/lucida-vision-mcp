@@ -1,6 +1,7 @@
-# Lucida — MCP Vision Server
+# lucida-vision-mcp
 
 **Lucida**（拉丁语：明亮）—— 清澈地看见。
+**vision-mcp**：视觉感知类 MCP 的约定俗成归类后缀。
 
 通用视觉感知基础设施 —— **眼睛不是大脑**：只陈述视觉事实与局限，绝不输出领域诊断、行动建议或工作流编排。
 (English: [README.en.md](README.en.md))
@@ -23,8 +24,8 @@
 
 | 形态 | 给谁 | 是什么 | 怎么用 |
 |---|---|---|---|
-| **npm 安装**（`mcp-vision-srv`） | 习惯终端命令的用户 | npm 包（发布后） | `npm install -g mcp-vision-srv` 全局装，或 `npx -y mcp-vision-srv` 免安装直接跑；离线可 `npm install <tgz>` |
-| **发布包**（Release zip，`mcp-vision-server-vX.Y.Z.zip`） | 不确定自己环境有没有依赖的用户 | 编译好的单文件程序 + 引导脚本 + MCP Host 配置模板，约 112 KB | 解压 → `install.cmd`（自动检测/安装 Node，**绝不覆盖已有环境**）→ 设 key → 接入 MCP Host |
+| **npm 安装**（`lucida-vision-mcp`） | 习惯终端命令的用户 | npm 包（发布后） | `npm install -g lucida-vision-mcp` 全局装，或 `npx -y lucida-vision-mcp` 免安装直接跑；离线可 `npm install <tgz>` |
+| **发布包**（Release zip，`lucida-vision-mcp-vX.Y.Z.zip`） | 不确定自己环境有没有依赖的用户 | 编译好的单文件程序 + 引导脚本 + MCP Host 配置模板，约 112 KB | 解压 → `install.cmd`（自动检测/安装 Node，**绝不覆盖已有环境**）→ 设 key → 接入 MCP Host |
 | **源码包**（Source zip / git clone） | 开发者（已有依赖环境） | 全部源码 + 测试 + CI，约 124 KB | `pnpm install && pnpm build` 后运行 |
 
 三种方式最终都是同一个程序（stdio 标准 MCP 协议）。发布包内部含 Windows

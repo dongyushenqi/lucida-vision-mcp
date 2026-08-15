@@ -1,6 +1,7 @@
-# Lucida — MCP Vision Server
+# lucida-vision-mcp
 
 **Lucida** (Latin: bright / clear) — to see clearly.
+**vision-mcp**: the conventional category suffix for vision-perception MCP servers.
 
 A general-purpose visual perception infrastructure — **eyes, not brain**: it states
 visual facts and limitations only, never outputs domain diagnoses, action suggestions,
@@ -51,8 +52,8 @@ capabilities are honestly reported as "not executable".
 
 | Option | For whom | What it is | How to use |
 |---|---|---|---|
-| **npm install** (`mcp-vision-srv`) | Users comfortable with terminal commands | npm package (once published) | `npm install -g mcp-vision-srv`, or `npx -y mcp-vision-srv` to run without installing; offline: `npm install <tgz>` |
-| **Release zip** (`mcp-vision-server-vX.Y.Z.zip`) | Users unsure whether their machine has dependencies | Compiled single-file program + launcher scripts + MCP host config template, ~112 KB | Unzip → `install.cmd` (auto-detects/installs Node, **never overwrites your environment**) → set your key → connect to an MCP host |
+| **npm install** (`lucida-vision-mcp`) | Users comfortable with terminal commands | npm package (once published) | `npm install -g lucida-vision-mcp`, or `npx -y lucida-vision-mcp` to run without installing; offline: `npm install <tgz>` |
+| **Release zip** (`lucida-vision-mcp-vX.Y.Z.zip`) | Users unsure whether their machine has dependencies | Compiled single-file program + launcher scripts + MCP host config template, ~112 KB | Unzip → `install.cmd` (auto-detects/installs Node, **never overwrites your environment**) → set your key → connect to an MCP host |
 | **Source zip / git clone** | Developers (already have a toolchain) | All source + tests + CI, ~124 KB | `pnpm install && pnpm build` then run |
 
 All three options deliver the same program (stdio, standard MCP protocol). The release
