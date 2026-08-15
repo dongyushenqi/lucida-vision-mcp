@@ -1,0 +1,39 @@
+name: Release
+
+# 打 tag（v*）时自动发布：
+#   附件 1 = 源码包（source.zip，供开发者）
+#   附件 2 = 发布包（mcp-vision-server-vX.Y.Z.zip，下载即用，含引导脚本）
+# 密钥安全：本流程不接触任何密钥；AGNES_API_KEY 只存在于使用者本机环境变量。
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm -r run build
+      - name: Package release bundle
+        run: node scripts/build-release.mjs
+      - name: Package source archive
+        # 源码包 = 仓库快照（不含 node_modules / lib / .git）
+        run: git archive --format=zip -o dist/mcp-vision-server-source.zip HEAD
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true

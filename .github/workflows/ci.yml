@@ -7,7 +7,13 @@ on:
 
 jobs:
   build-test:
-    runs-on: ubuntu-latest
+    name: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # 三平台矩阵：Windows 本地实测 + macOS/Linux 由 CI 自动验证
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4

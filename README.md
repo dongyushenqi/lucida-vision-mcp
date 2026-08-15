@@ -1,6 +1,24 @@
 # MCP Vision Server
 
 通用视觉感知基础设施 —— **眼睛不是大脑**：只陈述视觉事实与局限，绝不输出领域诊断、行动建议或工作流编排。
+(English: [README.en.md](README.en.md))
+
+## 两种下载形态（重要）
+
+| 形态 | 给谁 | 是什么 | 怎么用 |
+|---|---|---|---|
+| **源码包**（Source zip，GitHub 自动生成） | 开发者（已有依赖环境） | 全部源码 + 测试 + CI，约 124 KB | `pnpm install && pnpm build` 后运行 |
+| **发布包**（Release zip，`mcp-vision-server-vX.Y.Z.zip`） | 不确定自己环境有没有依赖的用户 | 编译好的单文件程序 + 引导脚本 + MCP Host 配置模板，约 112 KB | 解压 → `install.cmd`（自动检测/安装 Node，**绝不覆盖已有环境**）→ 设 key → 接入 MCP Host |
+
+发布包内部含 Windows（`install.cmd`/`start.cmd`）与 macOS/Linux（`install.sh`/`start.sh`）引导脚本及中英双语说明。
+
+## 平台支持声明
+
+| 平台 | 状态 |
+|---|---|
+| **Windows** | ✅ 完整支持：本地实测 + CI 自动测试 |
+| **macOS** | ✅ 可用：代码与引导脚本已适配，经 CI 自动测试验证；**未经本地人工实测**（开发环境为 Windows） |
+| **Linux** | ✅ 可用：代码与引导脚本已适配，经 CI 自动测试验证；**未经本地人工实测**（开发环境为 Windows） |
 
 ## 架构（四层职责隔离）
 
@@ -23,7 +41,7 @@ Vision Core                       ← Observation 图谱 / Operation 生命周�
 |---|---|
 | `contracts` | 领域类型 + zod schema + schema_version 演进 + 错误码命名空间 + JCS 规范化 |
 | `vision-core` | Observation Graph、Operation 生命周期与 Commit Boundary、Capability Registry、统一 Fetch Boundary、Provider Adapter |
-| `vision-interface` | 7 个 Tool（session.create/get/delete、observe、detect、ocr、operation.get/cancel）、幂等/去重/冲突、Session 授权沙箱 |
+| `vision-interface` | 8 个 Tool（session.create/get/delete、observe、detect、ocr、operation.get/cancel）、幂等/去重/冲突、Session 授权沙箱 |
 | `compatibility` | Legacy 协议家族（官方 MCP SDK）、协议取消 → 内部 CancellationToken 桥、Modern 占位 |
 | `server` | 装配壳 + stdio 传输入口 |
 
@@ -66,11 +84,11 @@ VISION_PROVIDERS_JSON='[
 ## 状态
 
 - [x] M0 contracts（领域契约）31 测试
-- [x] M1 vision-core（图谱/Operation/Fetch Boundary/Agnes Adapter）35 测试
-- [x] M2 vision-interface（8 个工具 + 幂等 + 沙箱）18 测试
-- [x] M3 compatibility + server（Legacy Family + stdio）7 E2E + 2 测试
-- [x] M4 E2E 冒烟验收（InMemoryTransport 协议级 + stdio 真实子进程）
-- 合计 93 个测试全绿（`pnpm test`）
+- [x] M1 vision-core（图谱/Operation/Fetch Boundary/IQA/Provider Adapter）56 测试
+- [x] M2 vision-interface（8 个工具 + 幂等 + 沙箱）19 测试
+- [x] M3 compatibility + server（Legacy Family + stdio + 发布包）16 测试
+- [x] M4 E2E 冒烟验收（InMemoryTransport 协议级 + stdio 真实子进程 + 发布包 bundle 握手）
+- 合计 122 个测试全绿（`pnpm test`）；CI 在 Windows / macOS / Linux 三平台自动运行
 
 ## 真实 Provider 测试（需 API Key，Key 绝不入库）
 
