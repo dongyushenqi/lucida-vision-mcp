@@ -1,0 +1,4 @@
+# 统一 LF 行尾，消除跨平台 diff 噪音
+* text=auto eol=lf
+*.png binary
+*.sqlite binary

@@ -51,10 +51,25 @@ pnpm test
 - [x] M4 E2E 冒烟验收（InMemoryTransport 协议级 + stdio 真实子进程）
 - 合计 93 个测试全绿（`pnpm test`）
 
-## 真实 Provider 冒烟（可选，需 API Key）
+## 真实 Provider 测试（需 API Key，Key 绝不入库）
+
+**安全约定**：`AGNES_API_KEY` 只经环境变量注入（本地 shell / GitHub Secret），
+源码、测试、文档、git 历史中均不得出现真实 Key。
 
 ```bash
-# 需要 AGNES_API_KEY；启动时自动执行能力探针（仅更新 Capability Registry）
+# 1) stdio 全链路冒烟（真实探针 + 真实执行）
 cd packages/server
-AGNES_API_KEY=<key> node lib/index.js   # 或 stdio-smoke.mjs 走客户端冒烟
+AGNES_API_KEY=<key> node stdio-smoke.mjs
+
+# 2) 真实 API 全链路验收（probe/observe/json_mode/ocr/detect/幂等/冲突）
+AGNES_API_KEY=<key> node e2e-real.mjs
+
+# 3) vitest 真实 API 用例（有 Key 自动跑，无 Key 自动跳过）
+AGNES_API_KEY=<key> pnpm -r run test
 ```
+
+GitHub 场景：
+- `CI` workflow（push/PR）：无 Key 全量回归（真实用例自动跳过）；
+- `E2E Real Agnes API` workflow（手动触发）：经仓库 Secret `AGNES_API_KEY` 注入后跑 `e2e-real.mjs`。
+
+免费层注意：真实测试每次运行约消耗 7 次 API 调用（probe 3 次 + 执行 4 次），请控制频率。

@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm -r run build
+      - name: Test
+        # 无 AGNES_API_KEY 时，真实 API 用例自动跳过（describe.runIf）
+        run: pnpm -r run test
+      - name: Stdio smoke (no key, graceful degradation)
+        run: node packages/server/stdio-smoke.mjs

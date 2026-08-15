@@ -1,5 +1,6 @@
 // stdio 传输 E2E 冒烟（验收脚本，非单测）：真实子进程 + 真实 stdio 传输
 // 运行：cd packages/server && node stdio-smoke.mjs
+// 可选：AGNES_API_KEY=<key> 环境变量注入真实 Provider（key 绝不落盘/入库）
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 
@@ -9,7 +10,8 @@ const PNG_1PX =
 const transport = new StdioClientTransport({
   command: process.execPath,
   args: ["lib/index.js"],
-  env: { ...process.env, AGNES_API_KEY: "", VISION_PROBE_ON_BOOT: "false" },
+  // 透传环境变量：有 AGNES_API_KEY 则真实探针 + 真实执行；无则优雅降级
+  env: { ...process.env, VISION_PROBE_ON_BOOT: process.env.VISION_PROBE_ON_BOOT ?? "true" },
 });
 const client = new Client({ name: "stdio-smoke", version: "0.0.1" });
 await client.connect(transport);

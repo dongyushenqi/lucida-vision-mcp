@@ -1,0 +1,27 @@
+name: E2E Real Agnes API
+
+# 手动触发的真实 Provider 验收：需要仓库 Secret `AGNES_API_KEY`。
+# 设计约束：Key 只经 GitHub Secret 注入环境变量，绝不进入仓库/日志。
+on:
+  workflow_dispatch:
+
+jobs:
+  e2e-real:
+    runs-on: ubuntu-latest
+    env:
+      AGNES_API_KEY: ${{ secrets.AGNES_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm -r run build
+      - name: Real Agnes E2E (stdio + 真实探针/执行)
+        run: node packages/server/e2e-real.mjs
