@@ -36,6 +36,8 @@ class MockProvider implements VLMProvider {
   lastInstruction?: string;
   /** 最近一次 execute 收到的图片数组（断言多图批量用） */
   lastImages?: ProviderImage[];
+  /** 最近一次 execute 的 jsonMode */
+  lastJsonMode?: boolean;
 
   constructor(
     private readonly opts: {
@@ -66,6 +68,7 @@ class MockProvider implements VLMProvider {
     this.calls += 1;
     this.lastInstruction = req.instruction;
     this.lastImages = req.images;
+    this.lastJsonMode = req.jsonMode;
     if (this.opts.failWith) throw this.opts.failWith;
     if (this.opts.delayMs) {
       await new Promise((resolve) => setTimeout(resolve, this.opts.delayMs));
@@ -891,5 +894,123 @@ describe("vision.observe / summarize profile 档位（v0.2.1）", () => {
     expect(res.result.isError).toBe(true);
     const e = res.result.structured as { error: { application_error_code: string } };
     expect(e.error.application_error_code).toBe(ApplicationErrorCode.VISION_INVALID_ARGS);
+  });
+});
+
+describe("vision.observe 声明式结构化观察（v0.3）", () => {
+  const SCHEMA_ARGS = (sessionId: string, dims: string[], extra: Record<string, unknown> = {}) => ({
+    vision_session_id: sessionId,
+    image_input: { type: "inline", inline: { mime_type: "image/png", blob: PNG_1PX } },
+    observation_schema: { dimensions: dims },
+    ...extra,
+  });
+  const STRUCTURED_PROVIDER = { text: '{"color":"green","shape":"circular"}' };
+
+  it("声明维度 → jsonMode 开启，单个 structured_observation，字段值如实返回", async () => {
+    const { executor, sessionId, provider } = await makeEnv({
+      verified: ["image_understanding", "structured_detection"],
+      ...STRUCTURED_PROVIDER,
+    });
+    const res = await call(executor, "vision.observe", SCHEMA_ARGS(sessionId, ["color", "shape"]));
+    expect(res.result.isError).toBe(false);
+    expect(provider.lastJsonMode).toBe(true);
+    const s = res.result.structured as { observations: { label: string; text: string }[] };
+    expect(s.observations[0]!.label).toBe("structured_observation");
+    const map = JSON.parse(s.observations[0]!.text) as Record<string, { value: unknown }>;
+    expect(map["color"]!.value).toBe("green");
+    expect(map["shape"]!.value).toBe("circular");
+  });
+
+  it("字段 unknown + 合法 reason → 合法证据（不失败）", async () => {
+    const { executor, sessionId } = await makeEnv({
+      verified: ["image_understanding", "structured_detection"],
+      text: '{"symmetry":{"value":"unknown","reason":"insufficient_visual_evidence"},"count":3}',
+    });
+    const res = await call(executor, "vision.observe", SCHEMA_ARGS(sessionId, ["symmetry", "count"]));
+    expect(res.result.isError).toBe(false);
+    const s = res.result.structured as { observations: { text: string }[] };
+    const map = JSON.parse(s.observations[0]!.text) as Record<string, { value: unknown; reason?: string }>;
+    expect(map["symmetry"]).toEqual({ value: "unknown", reason: "insufficient_visual_evidence" });
+    expect(map["count"]!.value).toBe(3);
+  });
+
+  it("reason 非枚举 → 整体 structured_parse_failed（两级失败语义）", async () => {
+    const { executor, sessionId } = await makeEnv({
+      verified: ["image_understanding", "structured_detection"],
+      text: '{"shape":{"value":"unknown","reason":"i-dont-know"}}',
+    });
+    const res = await call(executor, "vision.observe", SCHEMA_ARGS(sessionId, ["shape"]));
+    expect(res.result.isError).toBe(false);
+    const s = res.result.structured as { observations: { limitations?: string[] }[] };
+    expect(s.observations[0]!.limitations).toContain("structured_parse_failed");
+  });
+
+  it("输出含未声明键 → 整体 parse_failed（DSL 边界：只允许声明的维度）", async () => {
+    const { executor, sessionId } = await makeEnv({
+      verified: ["image_understanding", "structured_detection"],
+      text: '{"color":"green","hacked_extra":"x"}',
+    });
+    const res = await call(executor, "vision.observe", SCHEMA_ARGS(sessionId, ["color"]));
+    const s = res.result.structured as { observations: { limitations?: string[] }[] };
+    expect(s.observations[0]!.limitations).toContain("structured_parse_failed");
+  });
+
+  it("缺失维度 → 如实标记 insufficient_visual_evidence", async () => {
+    const { executor, sessionId } = await makeEnv({
+      verified: ["image_understanding", "structured_detection"],
+      text: '{"color":"green"}',
+    });
+    const res = await call(executor, "vision.observe", SCHEMA_ARGS(sessionId, ["color", "count"]));
+    const s = res.result.structured as { observations: { text: string }[] };
+    const map = JSON.parse(s.observations[0]!.text) as Record<string, { value: unknown; reason?: string }>;
+    expect(map["count"]).toEqual({ value: "unknown", reason: "insufficient_visual_evidence" });
+  });
+
+  it("能力门禁：未经 structured_detection 验证 → 如实不可执行", async () => {
+    const { executor, sessionId } = await makeEnv({ verified: ["image_understanding"] });
+    const res = await call(executor, "vision.observe", SCHEMA_ARGS(sessionId, ["color"]));
+    const s = res.result.structured as { executability: { executable: boolean; reasons: string[] } };
+    expect(s.executability.executable).toBe(false);
+    expect(s.executability.reasons.join()).toContain("structured_detection");
+  });
+
+  it("Agent instruction 与结构契约叠加（语义前缀 + 结构强制）", async () => {
+    const { executor, sessionId, provider } = await makeEnv({
+      verified: ["image_understanding", "structured_detection"],
+      ...STRUCTURED_PROVIDER,
+    });
+    await call(
+      executor,
+      "vision.observe",
+      SCHEMA_ARGS(sessionId, ["color"], { instruction: "重点观察叶子颜色" }),
+    );
+    const ins = provider.lastInstruction ?? "";
+    expect(ins).toContain("重点观察叶子颜色");
+    expect(ins).toContain("仅输出一个 JSON 对象");
+    expect(ins).toContain("insufficient_visual_evidence");
+  });
+
+  it("参数校验：空维度与超过上限（20）→ VISION_INVALID_ARGS", async () => {
+    const { executor, sessionId } = await makeEnv({ verified: ["image_understanding", "structured_detection"] });
+    const empty = await call(executor, "vision.observe", SCHEMA_ARGS(sessionId, []));
+    expect(empty.result.isError).toBe(true);
+    const tooMany = await call(
+      executor,
+      "vision.observe",
+      SCHEMA_ARGS(sessionId, Array.from({ length: 21 }, (_, i) => `d${i}`)),
+    );
+    expect(tooMany.result.isError).toBe(true);
+  });
+
+  it("幂等：同 schema + operation_id 二次调用去重（schema 参与参数身份）", async () => {
+    const { executor, sessionId, provider } = await makeEnv({
+      verified: ["image_understanding", "structured_detection"],
+      ...STRUCTURED_PROVIDER,
+    });
+    const args = SCHEMA_ARGS(sessionId, ["color", "shape"], { operation_id: "op_struct" });
+    await call(executor, "vision.observe", args);
+    const second = await call(executor, "vision.observe", args);
+    expect(second.deduplicated).toBe(true);
+    expect(provider.calls).toBe(1);
   });
 });

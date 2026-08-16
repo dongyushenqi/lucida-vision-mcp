@@ -7,6 +7,20 @@ import { ImageInput } from "@mcp-vision/contracts";
 /** 观察档位：default=默认摘要级；deep=预置深入指令包（仅当用户明确要求更深入/更专业时使用；指令预设，非能力预设） */
 export const ObserveProfile = z.enum(["default", "deep"]);
 
+/** 声明式结构化观察维度上限（单次调用） */
+export const MAX_OBSERVATION_DIMENSIONS = 20;
+
+/**
+ * 声明式结构化观察（v0.3）：Agent 声明"观察什么维度"（如 color/shape/count）。
+ * Server 不解释维度语义——维度名仅作为输出键；只允许描述观察对象与结构表达，
+ * 禁止推理/组合/筛选/比较/决策语义（DSL 边界，见 docs/DECISIONS.md）。
+ */
+export const ObservationSchema = z
+  .object({
+    dimensions: z.array(z.string().min(1).max(64)).min(1).max(MAX_OBSERVATION_DIMENSIONS),
+  })
+  .strict();
+
 const visionSessionId = z.string().min(1);
 const operationId = z.string().min(1);
 const providerId = z.string().min(1);
@@ -35,6 +49,12 @@ export const ObserveArgs = z
     profile: ObserveProfile.optional(),
     /** 可选 JSON 模式：结构化观察输出（须经 probe 验证 structured_detection） */
     json_mode: z.boolean().optional(),
+    /**
+     * 声明式结构化观察（v0.3）：声明观察维度，逐字段返回 value 或 unknown+reason。
+     * 提供时进入结构化模式（视同 json_mode=true），须经 structured_detection 探针验证。
+     * 优先级高于 json_mode。
+     */
+    observation_schema: ObservationSchema.optional(),
     provider_id: providerId.optional(),
     /** 应用级请求去重标识（作用域：Vision Session，规格五.2） */
     operation_id: operationId.optional(),
@@ -99,6 +119,7 @@ export type SessionDeleteArgs = z.infer<typeof SessionDeleteArgs>;
 export type ObserveArgs = z.infer<typeof ObserveArgs>;
 export type DetectArgs = z.infer<typeof DetectArgs>;
 export type SummarizeArgs = z.infer<typeof SummarizeArgs>;
+export type ObservationSchema = z.infer<typeof ObservationSchema>;
 export type OcrArgs = z.infer<typeof OcrArgs>;
 export type OperationGetArgs = z.infer<typeof OperationGetArgs>;
 export type OperationCancelArgs = z.infer<typeof OperationCancelArgs>;

@@ -120,6 +120,7 @@ Full positioning statement, differences from skills and similar MCPs, architectu
 
 - **First interface: the `instruction` argument** — declare observation requirements and constraints in plain language (e.g. "describe only visible geometry, no inference" or "OCR all visible text, keep layout"). This is the main channel for any depth of observation.
 - **Second interface: `profile: "deep"`** — a preset deep-observation instruction bundle (includes watermarks, small text, fine-grained features). Use it only when the user explicitly asks for "deeper / more professional"; without an explicit request the default always applies.
+- **Third interface: `observation_schema` (declarative structured observation)** — declare the dimensions to observe (e.g. `{"dimensions": ["color", "shape", "count"]}`); the server returns per-dimension `value` or `unknown` with an evidence-state `reason` (six-enum closed set). Structure is server-enforced: undeclared keys or invalid reasons are honestly reported as `structured_parse_failed`, while field-level `unknown` is legitimate evidence. Requires a model that passes the structured-output probe. It declares *what to observe and how to express it* — never reasoning or decisions.
 - **Trigger semantics**: the default is always the concise mode; only an explicit deeper request switches it. `profile` is an instruction preset — it never changes the model, failure policy, or other capabilities.
 - Deployments can set `VISION_DEFAULT_PROFILE=deep` as the baseline.
 
@@ -272,6 +273,7 @@ MIT
 
 - **第一接口：`instruction` 参数**——直接用自然语言声明观察要求与约束（例如「只描述可见的几何结构，不做推断」「对所有可见文字做 OCR 并保持布局」）。这是专业化的主通道，任何深度要求都可以写在这里。
 - **第二接口：`profile: "deep"`**——预置的深入观察指令包（纳入水印、细小文字、细粒度特征）。**仅当用户明确要求「更深入/更专业」时使用**；无明确指示一律 default。
+- **第三接口：`observation_schema`（声明式结构化观察）**——声明观察维度（如 `{"dimensions": ["color", "shape", "count"]}`），服务器逐字段返回 `value` 或 `unknown + reason`（六种封闭的证据状态枚举）。结构由服务器强制校验：未声明键、非法 reason 如实报 `structured_parse_failed`；字段级 `unknown` 是合法证据。需模型通过结构化输出探针验证。只声明「观察什么、以什么结构表达」，不承载推理/决策语义。
 - **触发语义**：默认永远是摘要级；只有明确的深入要求才切换。`profile` 只是指令预设——不改变模型、不改变失败策略、不自动开启其他能力。
 - 部署方可用 `VISION_DEFAULT_PROFILE=deep` 设定基调。
 

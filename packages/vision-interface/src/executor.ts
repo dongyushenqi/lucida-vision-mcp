@@ -42,6 +42,7 @@ import {
   SessionDeleteArgs,
   SessionGetArgs,
   SummarizeArgs,
+  type ObservationSchema,
 } from "./args.js";
 import type { IdentityContext } from "./identity.js";
 import { parseVisionResourceUri } from "./resources.js";
@@ -137,6 +138,7 @@ interface VisualArgs {
   json_mode?: boolean;
   instruction?: string;
   profile?: "default" | "deep";
+  observation_schema?: ObservationSchema;
   labels?: string[];
   lang?: string;
 }
@@ -336,7 +338,9 @@ export class VisionExecutor {
 
       const provider = this.core.providers.get(args.provider_id ?? this.defaultProviderId);
 
-      const jsonMode = kind === "detect" || (kind === "observe" && args.json_mode === true);
+      const jsonMode =
+        kind === "detect" ||
+        (kind === "observe" && (args.json_mode === true || args.observation_schema !== undefined));
       const required: CapabilityId[] =
         kind === "observe" ? (jsonMode ? ["image_understanding", "structured_detection"] : ["image_understanding"])
         : kind === "summarize" ? ["image_understanding"]
@@ -544,6 +548,17 @@ export class VisionExecutor {
     const profile = args.profile ?? this.defaultProfile;
     switch (kind) {
       case "observe":
+        if (args.observation_schema) {
+          // 声明式结构化观察（v0.3）：结构契约由 Server 强制，Agent instruction 仅作语义前缀
+          const structured =
+            `仅输出一个 JSON 对象，不要任何其他文字：{"<维度名>": <值>}。` +
+            `每个维度的值必须是该维度的可观察客观事实；` +
+            `若无法可靠观察，值为 "unknown" 且必须附带 reason 字段，` +
+            `reason 只能是以下枚举之一：insufficient_visual_evidence / occluded / ambiguous / ` +
+            `not_applicable / unsupported / execution_unavailable。绝不猜测。` +
+            `观察维度：${args.observation_schema.dimensions.join("、")}。`;
+          return args.instruction ? `${args.instruction}\n${structured}` : structured;
+        }
         if (args.instruction) return args.instruction;
         if (profile === "deep") return DEFAULT_DEEP_OBSERVE_INSTRUCTION;
         return this.defaultInstruction ?? DEFAULT_OBSERVE_INSTRUCTION;
@@ -594,6 +609,23 @@ export class VisionExecutor {
       status: "pending",
       created_at: "",
     };
+
+    // 声明式结构化观察（v0.3）：逐维度 value / unknown+reason；结构损坏 → structured_parse_failed
+    if (kind === "observe" && args.observation_schema) {
+      const parsed = parseDimensionObservation(providerResult.text, args.observation_schema.dimensions);
+      return [
+        this.toObservation(
+          base,
+          "structured_observation",
+          { type: "full_image", coordinate_system: "image_px" },
+          null,
+          operationId,
+          provider,
+          parsed.ok ? JSON.stringify(parsed.map) : providerResult.text,
+          parsed.ok ? [] : ["structured_parse_failed"],
+        ),
+      ];
+    }
 
     if (kind === "detect" || (kind === "observe" && args.json_mode === true)) {
       // 契约校验（审查 #6）：detect 要求 bbox 存在且合法（坐标序 + 图像边界）；
@@ -751,6 +783,63 @@ interface StructuredParseResult {
 }
 
 const DEFAULT_MAX_STRUCTURED_OBJECTS = 500;
+
+/** unknown 证据状态枚举（v0.3 契约）：reason 是证据状态，unknown 是证据值 */
+const UNKNOWN_REASONS = new Set([
+  "insufficient_visual_evidence",
+  "occluded",
+  "ambiguous",
+  "not_applicable",
+  "unsupported",
+  "execution_unavailable",
+]);
+
+/**
+ * 声明式维度观察解析（v0.3 契约）：
+ * - 输出必须是 JSON 对象，键必须 ⊆ 声明维度（未知键 → 整体 parse_failed）；
+ * - 每个维度：标量值 = 观察事实；{value:"unknown", reason:枚举} = 诚实未知（合法证据）；
+ * - reason 非枚举或结构损坏 → 整体 parse_failed（两级失败语义，与字段级 unknown 严格区分）；
+ * - 缺失维度 → 如实标记 insufficient_visual_evidence。
+ */
+function parseDimensionObservation(
+  text: string,
+  dimensions: string[],
+): { ok: boolean; map?: Record<string, { value: unknown; reason?: string }> } {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return { ok: false };
+  }
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return { ok: false };
+  const obj = raw as Record<string, unknown>;
+  const dimSet = new Set(dimensions);
+  for (const key of Object.keys(obj)) {
+    if (!dimSet.has(key)) return { ok: false };
+  }
+  const map: Record<string, { value: unknown; reason?: string }> = {};
+  for (const dim of dimensions) {
+    const v = obj[dim];
+    if (v === undefined) {
+      map[dim] = { value: "unknown", reason: "insufficient_visual_evidence" };
+      continue;
+    }
+    if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+      const rec = v as Record<string, unknown>;
+      if (rec["value"] === "unknown") {
+        if (typeof rec["reason"] !== "string" || !UNKNOWN_REASONS.has(rec["reason"])) {
+          return { ok: false };
+        }
+        map[dim] = { value: "unknown", reason: rec["reason"] as string };
+        continue;
+      }
+      map[dim] = { value: rec["value"] };
+      continue;
+    }
+    map[dim] = { value: v };
+  }
+  return { ok: true, map };
+}
 
 function parseStructuredObservations(
   text: string,

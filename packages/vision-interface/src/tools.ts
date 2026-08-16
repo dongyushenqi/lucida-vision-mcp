@@ -54,6 +54,7 @@ export function createVisionTools(): ToolSpec[] {
         "通用视觉观察：返回可观察的视觉事实（默认聚焦图片主体，不转录水印等细小文字）。" +
         "默认不主动输出主观评价；用户明确要求时，基于可观察特征参考普遍审美标准给出，并说明依据。" +
         "profile=deep 时预置深入指令（纳入水印/细小文字/细粒度特征；仅当用户明确要求更深入时使用）。" +
+        "observation_schema 提供声明式结构化观察：声明维度（如 color/shape），逐字段返回 value 或 unknown+reason（须模型验证通过）。" +
         "文字转录请用 vision.ocr。只陈述事实，不推断诊断。",
       inputSchema: ObserveArgs,
     },
