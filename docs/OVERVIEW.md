@@ -37,7 +37,7 @@ Vision Core                        ← Observation 图谱 / Operation 生命周�
 |---|---|
 | `contracts` | 领域类型 + zod schema + schema_version 演进 + 错误码命名空间 + JCS 规范化 |
 | `vision-core` | Observation Graph、Operation 生命周期与 Commit Boundary、Capability Registry、统一 Fetch Boundary、Provider Adapter |
-| `vision-interface` | 8 个工具（session.create/get/delete、observe、detect、ocr、operation.get/cancel）、幂等/去重/冲突、Session 授权沙箱 |
+| `vision-interface` | 9 个工具（session.create/get/delete、observe、summarize、detect、ocr、operation.get/cancel）、幂等/去重/冲突、Session 授权沙箱 |
 | `compatibility` | Legacy 协议家族（官方 MCP SDK）、协议取消 → 内部 CancellationToken 桥、Modern 占位 |
 | `server` | 装配壳 + stdio 传输入口 |
 
@@ -52,12 +52,12 @@ Vision Core                        ← Observation 图谱 / Operation 生命周�
 
 ## 测试状态
 
-- [x] M0 contracts（领域契约）— 33 测试
-- [x] M1 vision-core（图谱 / Operation / Fetch Boundary / IQA / Provider Adapter）— 81 测试
-- [x] M2 vision-interface（8 个工具 + 幂等 + 沙箱）— 29 测试
-- [x] M3 compatibility + server（Legacy Family + stdio + 发布包）— 23 测试
+- [x] M0 contracts（领域契约）— 34 测试
+- [x] M1 vision-core（图谱 / Operation / Fetch Boundary / IQA / Provider Adapter）— 82 测试
+- [x] M2 vision-interface（9 个工具 + 幂等 + 沙箱）— 38 测试
+- [x] M3 compatibility + server（Legacy Family + stdio + 发布包）— 24 测试
 - [x] M4 E2E 冒烟验收（InMemoryTransport 协议级 + stdio 真实子进程 + 发布包 bundle 握手）
-- 合计 166 个测试全绿（`pnpm test`）；CI 在 Windows / macOS / Linux 三平台自动运行
+- 合计 178 个测试全绿（`pnpm test`）；CI 在 Windows / macOS / Linux 三平台自动运行
 
 ## 真实 Provider 测试（需 API Key，Key 绝不入库）
 

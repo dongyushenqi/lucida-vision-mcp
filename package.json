@@ -1,6 +1,6 @@
 {
   "name": "lucida-vision-mcp",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "private": true,
   "description": "lucida-vision-mcp — 通用视觉感知 MCP 基础设施（眼睛不是大脑：只陈述视觉事实，绝不做领域决策）",
   "packageManager": "pnpm@11.21.0",

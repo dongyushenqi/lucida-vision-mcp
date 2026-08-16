@@ -12,10 +12,12 @@ import {
   VisionCore,
   type ProviderExecuteRequest,
   type ProviderExecuteResult,
+  type ProviderImage,
   type VLMProvider,
 } from "@mcp-vision/vision-core";
 import { InMemoryVisionStore } from "@mcp-vision/vision-core";
 import { VisionExecutor } from "../src/executor.js";
+import { MAX_SUMMARIZE_IMAGES } from "../src/args.js";
 import type { IdentityContext } from "../src/identity.js";
 
 const PNG_1PX =
@@ -32,6 +34,8 @@ class MockProvider implements VLMProvider {
   calls = 0;
   /** 最近一次 execute 收到的指令（断言默认指令/覆盖/Agent 指令用） */
   lastInstruction?: string;
+  /** 最近一次 execute 收到的图片数组（断言多图批量用） */
+  lastImages?: ProviderImage[];
 
   constructor(
     private readonly opts: {
@@ -61,6 +65,7 @@ class MockProvider implements VLMProvider {
   async execute(req: ProviderExecuteRequest, signal: AbortSignal): Promise<ProviderExecuteResult> {
     this.calls += 1;
     this.lastInstruction = req.instruction;
+    this.lastImages = req.images;
     if (this.opts.failWith) throw this.opts.failWith;
     if (this.opts.delayMs) {
       await new Promise((resolve) => setTimeout(resolve, this.opts.delayMs));
@@ -747,5 +752,80 @@ describe("vision.observe 默认指令（v0.1.3 校准）", () => {
     // 显式 provider_id → 精确选择第二个
     await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { provider_id: "mock2" }));
     expect(second.calls).toBe(1);
+  });
+});
+
+describe("vision.summarize（批量综合概述）", () => {
+  const PNG_2PX =
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAQAAABFaS0fAAAAEElEQVR42mNk+M9QzwAEjGQKABThA6XgvF6GAAAAAElFTkSuQmCC";
+  const IMG = (id: number) => ({
+    type: "inline" as const,
+    inline: { mime_type: "image/png", blob: id === 1 ? PNG_1PX : PNG_2PX },
+  });
+  const SUMMARY_ARGS = (sessionId: string, n: number, extra: Record<string, unknown> = {}) => ({
+    vision_session_id: sessionId,
+    image_inputs: Array.from({ length: n }, (_, i) => IMG(i + 1)),
+    ...extra,
+  });
+
+  it("2 张图 → Provider 收到 2 张图，单个 label=summary 观察，默认指令含批量语义", async () => {
+    const { executor, sessionId, provider } = await makeEnv({ verified: ["image_understanding"] });
+    const res = await call(executor, "vision.summarize", SUMMARY_ARGS(sessionId, 2));
+    expect(res.result.isError).toBe(false);
+    expect(provider.lastImages?.length).toBe(2);
+    const ins = provider.lastInstruction ?? "";
+    expect(ins).toContain("共 2 张");
+    expect(ins).toContain("不要逐张罗列");
+    expect(ins).toContain("水印与细小标识");
+    const s = res.result.structured as { observations: { label: string }[]; provider: string };
+    expect(s.observations).toHaveLength(1);
+    expect(s.observations[0]!.label).toBe("summary");
+    expect(s.provider).toBe("mock");
+  });
+
+  it("参数校验：空数组与超过上限（16）都拒绝 → VISION_INVALID_ARGS", async () => {
+    const { executor, sessionId } = await makeEnv({ verified: ["image_understanding"] });
+    const empty = await call(executor, "vision.summarize", SUMMARY_ARGS(sessionId, 0));
+    expect(empty.result.isError).toBe(true);
+    const tooMany = await call(executor, "vision.summarize", SUMMARY_ARGS(sessionId, MAX_SUMMARIZE_IMAGES + 1));
+    expect(tooMany.result.isError).toBe(true);
+    const e = tooMany.result.structured as { error: { application_error_code: string } };
+    expect(e.error.application_error_code).toBe(ApplicationErrorCode.VISION_INVALID_ARGS);
+  });
+
+  it("任一图片不可读 → 整体失败并如实报错（不静默丢弃）", async () => {
+    const { executor, sessionId, provider } = await makeEnv({ verified: ["image_understanding"] });
+    const res = await call(executor, "vision.summarize", {
+      vision_session_id: sessionId,
+      image_inputs: [
+        IMG(1),
+        { type: "inline", inline: { mime_type: "image/png", blob: "bm90LWFuLWltYWdl" } }, // 非图像字节
+      ],
+    });
+    expect(res.result.isError).toBe(true);
+    expect(provider.calls).toBe(0); // 取图阶段即失败，未触达 Provider
+  });
+
+  it("能力门禁：无 image_understanding 的 Provider → 如实不可执行", async () => {
+    const { executor, sessionId } = await makeEnv({ verified: ["ocr"] });
+    const res = await call(executor, "vision.summarize", SUMMARY_ARGS(sessionId, 1));
+    expect(res.result.isError).toBe(false);
+    const s = res.result.structured as { executability: { executable: boolean; reasons: string[] } };
+    expect(s.executability.executable).toBe(false);
+    expect(s.executability.reasons.join()).toContain("image_understanding");
+  });
+
+  it("operation_id 幂等：同参数二次调用去重；指令优先级 Agent > 注入 > 内置", async () => {
+    const { executor, sessionId, provider } = await makeEnv({ verified: ["image_understanding"] });
+    const args = SUMMARY_ARGS(sessionId, 2, { operation_id: "op_sum" });
+    const first = await call(executor, "vision.summarize", args);
+    expect(first.deduplicated).toBeUndefined();
+    const second = await call(executor, "vision.summarize", args);
+    expect(second.deduplicated).toBe(true);
+    expect(provider.calls).toBe(1);
+
+    // Agent 指令优先于注入
+    await call(executor, "vision.summarize", SUMMARY_ARGS(sessionId, 1, { instruction: "按顺序描述" }));
+    expect(provider.lastInstruction).toBe("按顺序描述");
   });
 });

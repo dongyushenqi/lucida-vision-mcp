@@ -1,30 +1,22 @@
 # lucida-vision-mcp（发布包）
 
-**Lucida**（拉丁语：明亮）—— 清澈地看见。
+给纯文本 AI 的一双眼睛：通用视觉感知 MCP 服务器。只陈述可核验的视觉事实，不做诊断、不给建议。
 
-通用视觉感知基础设施——"眼睛不是大脑"：只陈述视觉事实，不做诊断、不替你做决策。
+**eyes, not brain** — 本包是编译好的成品（单文件程序 + 引导脚本 + 配置模板），解压即用。
 
-## 项目定位（诚实声明）
+## 它能干什么
 
-**开发目的**：为不具备原生识图能力的 AI 提供标准化的"视觉感知器官"——通过标准
-MCP 协议把图像交给可验证的视觉模型，返回带来源记录（谁、什么模型、何时看的）
-的视觉证据，让"看"这个过程可审计、可验证、不撒谎。
+- 通过标准 MCP 协议，让不具备识图能力的 AI 获得视觉感知：看图、提取文字、结构化检测；
+- 任意 OpenAI 兼容视觉模型都可接入（通义千问、豆包、GPT、Agnes 等），**不预设默认模型**；
+- 每次观察带溯源：哪个模型、什么版本、何时看的；能力先经探针实测再开放，模型做不到的如实报"不可执行"，绝不编造；
+- 提供 9 个工具：`vision.observe`（观察）、`vision.summarize`（1~16 张图批量综合概述）、`vision.ocr`（文字提取）、`vision.detect`（结构化检测）、`vision.session.*`（会话）、`vision.operation.*`（任务查询/取消）。
 
-**诚实的边界**：
-1. 识别质量的上限 = 所接视觉模型；同等条件下，**达不到自带识图 AI**（如 GPT-4o / Claude 原生多模态）直接看图的水平；
-2. 不同于简单 skill：本系统是协议级基础设施（标准 MCP 协议、领域模型、能力探针、审计、幂等、安全边界）；
-3. **轻量生产级**：可投入个人/小团队生产使用；不含企业级能力（多租户认证、限流、数据清理、分布式）；
-4. 精细识别取决于所接模型，能力经探针验证后如实披露；**本系统不预设默认模型**——用哪个模型由你的接入决定；
+## 能力与边界
 
-## 平台支持声明（重要）
-
-| 平台 | 状态 |
-|---|---|
-| **Windows** | ✅ 完整支持：本地实测 + 自动测试（CI） |
-| **macOS** | ✅ 可用：代码与引导脚本已适配，经 CI 自动测试验证；**未经本地人工实测**（开发环境为 Windows） |
-| **Linux** | ✅ 可用：代码与引导脚本已适配，经 CI 自动测试验证；**未经本地人工实测**（开发环境为 Windows） |
-
-macOS/Linux 上如遇问题，欢迎反馈（附系统版本与报错信息）。
+- **上限 = 所接模型**：同一个模型直接看图的能力，永远不低于「模型 + 本系统」的组合——本系统不"加戏"、不"变强"，只是让"看"可审计、可溯源、不撒谎；
+- **聚焦主体**：默认描述图片主题要素，忽略水印与细小标识；需要文字时请用 `vision.ocr`；
+- **不推断**：观察不到的不编造，不确定的会标明；主观评价默认不主动输出，用户明确要求时基于可观察特征给出；
+- **定位**：个人与小团队可用的轻量生产级；不含多租户、限流、分布式等企业能力。
 
 ## 三步安装（Windows）
 
@@ -32,14 +24,10 @@ macOS/Linux 上如遇问题，欢迎反馈（附系统版本与报错信息）�
    - 已有 Node.js → 直接继续（不覆盖你的任何环境）
    - 没有 → 脚本自动用 winget 安装（装不上会给官网链接）
 2. **配置视觉模型 Key**（只经环境变量，绝不写入文件；二选一）：
-   - **标准方式**（任意 OpenAI 兼容模型）：在 MCP Host 配置的 `env` 里设
-     `VISION_PROVIDERS_JSON`（JSON 数组，字段：providerId / apiKey / baseUrl /
-     model / displayName；示例见仓库 README）
+   - **标准方式**（任意 OpenAI 兼容模型）：在 MCP Host 配置的 `env` 里设 `VISION_PROVIDERS_JSON`（JSON 数组，字段：providerId / apiKey / baseUrl / model / displayName；示例见仓库 README）
    - **快捷方式**（如 Agnes 免费模型）：`set AGNES_API_KEY=你的key`
-   （系统不预设默认模型，用哪个由你的配置决定）
 3. **接入 MCP Host**（如 Claude Desktop）：
-   - 打开 Host 的 MCP 配置文件，参照 `config/claude-desktop.example.json`，
-     `args` 里的路径改成你解压后的实际路径（`...\bin\lucida-vision-mcp.mjs`）
+   - 打开 Host 的 MCP 配置文件，参照 `config/claude-desktop.example.json`，`args` 里的路径改成你解压后的实际路径（`...\bin\lucida-vision-mcp.mjs`）
    - 重启 Host，即可看到 `vision.*` 系列工具
 
 也可以先直接跑 `start.cmd` 验证服务能启动。
@@ -47,18 +35,13 @@ macOS/Linux 上如遇问题，欢迎反馈（附系统版本与报错信息）�
 ## 三步安装（macOS / Linux）
 
 1. **检查环境**：终端运行 `./install.sh`（没有 Node 时按提示安装）
-2. **配置视觉模型 Key**（二选一，同 Windows 第 2 步）：
-   - 标准方式：`env` 里设 `VISION_PROVIDERS_JSON`（任意 OpenAI 兼容模型）
-   - 快捷方式：`export AGNES_API_KEY=你的key`（如 Agnes 免费模型）
-3. **接入 MCP Host**：同 Windows 第 3 步，`command: "node"`，`args` 指向
-   `.../bin/lucida-vision-mcp.mjs`
-
-## 多厂商支持（模型独立）
-
-任何 OpenAI 兼容视觉模型（千问/豆包/GPT/Agnes 等）都可用，无需改代码，
-通过环境变量 `VISION_PROVIDERS_JSON` 配置（JSON 数组，字段：
-providerId / apiKey / baseUrl / model / displayName）。详见仓库 docs/PROVIDERS.md。
+2. **配置视觉模型 Key**（二选一，同 Windows 第 2 步）：标准方式设 `VISION_PROVIDERS_JSON`；快捷方式 `export AGNES_API_KEY=你的key`
+3. **接入 MCP Host**：同 Windows 第 3 步，`command: "node"`，`args` 指向 `.../bin/lucida-vision-mcp.mjs`
 
 ## 密钥安全
 
 所有密钥只经环境变量注入；本包不包含、不读取、不写入任何密钥文件。
+
+## 更多
+
+完整文档（配置示例、环境变量表、平台支持）：https://github.com/dongyushenqi/lucida-vision-mcp

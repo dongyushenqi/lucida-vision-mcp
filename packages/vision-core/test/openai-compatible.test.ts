@@ -69,6 +69,33 @@ describe("OpenAICompatibleAdapter：多厂商通用性", () => {
     });
   });
 
+  it("多图批量（summarize）：content 按序展开为多个 image_url 部件", async () => {
+    const captured: unknown[] = [];
+    const fetchImpl = async (url: string, init: RequestInit) => {
+      captured.push(JSON.parse(init.body as string));
+      return okResponse("综合概述");
+    };
+    const adapter = new OpenAICompatibleAdapter({
+      providerId: "batch",
+      apiKey: "k",
+      baseUrl: "https://example.com/v1",
+      model: "batch-vlm",
+      fetchImpl,
+    });
+    const imgA = { bytes: Buffer.from(PNG_1PX, "base64"), mimeType: "image/png" };
+    const imgB = { bytes: Buffer.from(PNG_1PX, "base64"), mimeType: "image/png" };
+    await adapter.execute(
+      { images: [imgA, imgB], instruction: "综合概述", jsonMode: false },
+      new AbortController().signal,
+    );
+    const content = (captured[0] as { messages: { content: unknown[] }[] }).messages[0]!.content;
+    expect(content).toHaveLength(3); // text + 2 张图
+    const urlParts = content.filter((p) => (p as { type: string }).type === "image_url");
+    expect(urlParts).toHaveLength(2);
+    expect((urlParts[0] as { image_url: { url: string } }).image_url.url).toMatch(/^data:image\/png;base64,/);
+    expect((urlParts[1] as { image_url: { url: string } }).image_url.url).toMatch(/^data:image\/png;base64,/);
+  });
+
   it("未配 baseUrl 时默认 OpenAI 官方端点", async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       expect(url).toBe("https://api.openai.com/v1/chat/completions");

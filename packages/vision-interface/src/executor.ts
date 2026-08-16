@@ -41,13 +41,27 @@ import {
   SessionCreateArgs,
   SessionDeleteArgs,
   SessionGetArgs,
+  SummarizeArgs,
 } from "./args.js";
 import type { IdentityContext } from "./identity.js";
 import { parseVisionResourceUri } from "./resources.js";
 import { SessionSandbox } from "./session-sandbox.js";
 
 /**
- * 默认观察指令（仅当 Agent 未提供 instruction 时使用；v0.1.3 校准版）：
+ * 默认综合概述指令（仅当 Agent 未提供 instruction 时使用；批量散文式，{n} 为图片张数）。
+ * 与 observe 校准口径一致：客观特征必述 / 忽略水印等细碎元素 / 主观评价三档 / 不推断不编造。
+ */
+export const DEFAULT_SUMMARIZE_INSTRUCTION =
+  "综合概述这批图片（共 {n} 张）：提炼共同主题、显著差异与整体印象，用连贯的散文呈现，" +
+  "不要逐张罗列每张图的细节。" +
+  "只描述可观察的客观特征，必须如实给出；主体是什么就描述什么（人物/风景/物品等）。" +
+  "默认忽略水印与细小标识的文字转录、无关背景细节。\n" +
+  "主观评价（美丑、性感、魅力等）因人而异，但存在多数人的审美共识：" +
+  "默认不主动输出；当用户明确要求时，基于可观察的客观特征给出评价，" +
+  "可参考普遍审美标准，并说明支撑评价的可见依据；分歧空间可如实提及，但不得以“主观”为由拒绝回答。\n" +
+  "不推断、不编造：观察不到的不虚构；不确定的明确标注不确定；职业、健康状况、拍摄意图等推断不得输出。";
+
+/** 默认观察指令（仅当 Agent 未提供 instruction 时使用；v0.1.3 校准版）：
  * 聚焦图片主体；水印/细小标识默认不转录；客观特征必须如实描述；
  * 主观评价默认不主动输出，用户明确要求时基于可观察特征按审美共识给出；
  * 不推断、不编造。
@@ -85,11 +99,12 @@ export interface ExecuteResponse {
   inFlight?: boolean;
 }
 
-type VisualKind = "observe" | "detect" | "ocr";
+type VisualKind = "observe" | "detect" | "ocr" | "summarize";
 
 interface VisualArgs {
   vision_session_id: string;
-  image_input: ImageInput;
+  image_input?: ImageInput;
+  image_inputs?: ImageInput[];
   provider_id?: string;
   operation_id?: string;
   json_mode?: boolean;
@@ -101,8 +116,8 @@ interface VisualArgs {
 export class VisionExecutor {
   private readonly sandbox: SessionSandbox;
   private readonly defaultProviderId: string;
-  /** 默认观察指令（构造注入 > 内置默认；仅当 Agent 未提供 instruction 时使用） */
-  private readonly defaultInstruction: string;
+  /** 默认观察/概述指令（VISION_DEFAULT_INSTRUCTION 注入，可为空；各工具回落各自内置默认） */
+  private readonly defaultInstruction?: string;
   /** in-flight 取消映射（审查 #1）：operation_id → 执行中的 CancellationTokenSource */
   private readonly inflight = new Map<string, CancellationTokenSource>();
   /** 本请求结构化解析是否发生截断（膨胀防御，随 summary 输出后复位） */
@@ -113,7 +128,8 @@ export class VisionExecutor {
     opts?: { defaultProviderId?: string; defaultInstruction?: string },
   ) {
     this.sandbox = new SessionSandbox(core);
-    this.defaultInstruction = opts?.defaultInstruction ?? DEFAULT_OBSERVE_INSTRUCTION;
+    // VISION_DEFAULT_INSTRUCTION 注入（可为空）；各工具按需回落各自的默认指令
+    this.defaultInstruction = opts?.defaultInstruction;
     // 不预设默认模型：未指定 provider_id 时按注册顺序取第一个执行者（静态默认，非自动路由/故障转移）
     const providers = core.providers.all();
     this.defaultProviderId = opts?.defaultProviderId ?? providers[0]?.providerId ?? "";
@@ -142,6 +158,8 @@ export class VisionExecutor {
         return this.sessionDelete(req, this.parse(SessionDeleteArgs, req));
       case "vision.observe":
         return this.runVisual(req, this.parse(ObserveArgs, req), "observe");
+      case "vision.summarize":
+        return this.runVisual(req, this.parse(SummarizeArgs, req), "summarize");
       case "vision.detect":
         return this.runVisual(req, this.parse(DetectArgs, req), "detect");
       case "vision.ocr":
@@ -273,19 +291,28 @@ export class VisionExecutor {
       // in-flight 注册（审查 #1）：(session, operation_id) → CancellationTokenSource，供 operation.cancel 中止
       this.inflight.set(this.inflightKey(sessionId, operationId), req.cancel);
 
-      // 图像解析：uri/inline 走统一 Fetch Boundary；resource_ref 先授权后 dereference
-      const image = await this.resolveImage(args.image_input, sessionId, req.identity, req.cancel.signal);
+      // 图像解析：uri/inline 走统一 Fetch Boundary；resource_ref 先授权后 dereference。
+      // summarize 批量解析：任一图片失败 → 整体失败（诚实，不静默丢弃）
+      const images =
+        kind === "summarize"
+          ? await Promise.all(
+              (args.image_inputs ?? []).map((input) =>
+                this.resolveImage(input, sessionId, req.identity, req.cancel.signal),
+              ),
+            )
+          : [await this.resolveImage(args.image_input!, sessionId, req.identity, req.cancel.signal)];
 
       const provider = this.core.providers.get(args.provider_id ?? this.defaultProviderId);
 
       const jsonMode = kind === "detect" || (kind === "observe" && args.json_mode === true);
       const required: CapabilityId[] =
         kind === "observe" ? (jsonMode ? ["image_understanding", "structured_detection"] : ["image_understanding"])
+        : kind === "summarize" ? ["image_understanding"]
         : kind === "ocr" ? ["ocr"]
         : ["structured_detection"];
 
       // 能力门禁：Final Executable = Effective ∩ IQA（仅描述可行性；IQA 结果不进图谱）
-      const assessment = this.executability(provider, required, image);
+      const assessment = this.executability(provider, required, images);
       if (!assessment.executable) {
         const finished = this.core.operations.finish(sessionId, operationId, {
           status: "completed",
@@ -299,11 +326,12 @@ export class VisionExecutor {
 
       const instruction = this.buildInstruction(kind, args);
       const providerResult = await provider.execute(
-        { images: [image], instruction, jsonMode },
+        { images, instruction, jsonMode },
         req.cancel.signal,
       );
 
-      const observations = this.buildObservations(kind, providerResult, provider, operationId, args, image);
+      // summarize 至少 1 张图（zod 保证），此处取首图仅供结构化分支读取尺寸
+      const observations = this.buildObservations(kind, providerResult, provider, operationId, args, images[0]!);
       const committed = observations.map((o) => this.core.graph.commitObservation(sessionId, o));
 
       const summary = {
@@ -428,7 +456,7 @@ export class VisionExecutor {
   private executability(
     provider: VLMProvider,
     required: CapabilityId[],
-    image?: FetchedImage,
+    images?: FetchedImage[],
   ): {
     executable: boolean;
     reasons: string[];
@@ -457,23 +485,38 @@ export class VisionExecutor {
     }
     // IQA Capability Assessment：默认属于 Execution Metadata（IQA Result Semantics 封口），
     // 代码路径上只进评估结果，绝不进入 Observation Graph。
-    const iqa = image ? assessImage(image.bytes, image.mimeType, constraints) : undefined;
-    if (iqa && !iqa.executable) {
-      return {
-        executable: false,
-        reasons: iqa.reasons.map((r) => `IQA: ${r}`),
-        provider: provider.providerId,
-        constraints,
-        iqa,
-      };
+    // 批量输入（summarize）：任一图片不满足模型约束 → 整体不可执行（诚实，不静默丢弃）。
+    if (images && images.length > 0) {
+      for (let i = 0; i < images.length; i += 1) {
+        const img = images[i]!;
+        const iqa = assessImage(img.bytes, img.mimeType, constraints);
+        if (!iqa.executable) {
+          return {
+            executable: false,
+            // 批量输入带索引（定位失败图片）；单图保持原前缀（兼容既有行为）
+            reasons: iqa.reasons.map((r) =>
+              images.length > 1 ? `IQA(img[${i}]): ${r}` : `IQA: ${r}`,
+            ),
+            provider: provider.providerId,
+            constraints,
+            iqa,
+          };
+        }
+      }
     }
-    return { executable: true, reasons: [], provider: provider.providerId, constraints, iqa };
+    return { executable: true, reasons: [], provider: provider.providerId, constraints, iqa: undefined };
   }
 
   private buildInstruction(kind: VisualKind, args: VisualArgs): string {
     switch (kind) {
       case "observe":
-        return args.instruction ?? this.defaultInstruction;
+        return args.instruction ?? this.defaultInstruction ?? DEFAULT_OBSERVE_INSTRUCTION;
+      case "summarize":
+        return (
+          args.instruction ??
+          this.defaultInstruction ??
+          DEFAULT_SUMMARIZE_INSTRUCTION.replace("{n}", String(args.image_inputs?.length ?? 0))
+        );
       case "detect": {
         const labels = (args.labels ?? []).join("、");
         return (
@@ -571,6 +614,21 @@ export class VisionExecutor {
         this.toObservation(
           base,
           "text_block",
+          { type: "full_image", coordinate_system: "image_px" },
+          null,
+          operationId,
+          provider,
+          providerResult.text,
+        ),
+      ];
+    }
+
+    // summarize：批量综合概述 → 单个散文式 Observation（label=summary）
+    if (kind === "summarize") {
+      return [
+        this.toObservation(
+          base,
+          "summary",
           { type: "full_image", coordinate_system: "image_px" },
           null,
           operationId,

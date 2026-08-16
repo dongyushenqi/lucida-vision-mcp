@@ -47,6 +47,21 @@ export const DetectArgs = z
   })
   .strict();
 
+/** 单次 summarize 最多接收的图片数（批量上限；总张数不限，可分多次调用） */
+export const MAX_SUMMARIZE_IMAGES = 16;
+
+export const SummarizeArgs = z
+  .object({
+    vision_session_id: visionSessionId,
+    /** 待综合概述的图片（1~16 张；任一失败则整体失败并指明第几张） */
+    image_inputs: z.array(ImageInput).min(1).max(MAX_SUMMARIZE_IMAGES),
+    /** 感知指令：缺省为综合概述默认指令（散文式、不逐张罗列、忽略水印等细碎元素） */
+    instruction: z.string().min(1).max(2000).optional(),
+    provider_id: providerId.optional(),
+    operation_id: operationId.optional(),
+  })
+  .strict();
+
 export const OcrArgs = z
   .object({
     vision_session_id: visionSessionId,
@@ -76,6 +91,7 @@ export type SessionGetArgs = z.infer<typeof SessionGetArgs>;
 export type SessionDeleteArgs = z.infer<typeof SessionDeleteArgs>;
 export type ObserveArgs = z.infer<typeof ObserveArgs>;
 export type DetectArgs = z.infer<typeof DetectArgs>;
+export type SummarizeArgs = z.infer<typeof SummarizeArgs>;
 export type OcrArgs = z.infer<typeof OcrArgs>;
 export type OperationGetArgs = z.infer<typeof OperationGetArgs>;
 export type OperationCancelArgs = z.infer<typeof OperationCancelArgs>;

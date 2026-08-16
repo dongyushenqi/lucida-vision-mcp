@@ -70,6 +70,38 @@ describe("operationParameterIdentity（规格五.2）", () => {
     );
   });
 
+  it("image_inputs 数组（summarize）：逐元素归一化，元素等价 → 相同身份", () => {
+    const a = {
+      image_inputs: [
+        { type: "uri", uri: "HTTPS://EXAMPLE.com/./a.png" },
+        { type: "inline", inline: { mime_type: "image/PNG", blob: "AA==" } },
+      ],
+      instruction: "x",
+    };
+    const b = {
+      image_inputs: [
+        { type: "uri", uri: "https://example.com/a.png" },
+        { type: "inline", inline: { mime_type: "image/png; charset=utf-8", blob: "AA==" } },
+      ],
+      instruction: "x",
+    };
+    expect(operationParameterIdentity("vision.summarize", a)).toBe(
+      operationParameterIdentity("vision.summarize", b),
+    );
+
+    // 元素不同（图不同）→ 身份不同（去重语义：参数不同即新操作）
+    const c = {
+      image_inputs: [
+        { type: "uri", uri: "https://example.com/a.png" },
+        { type: "uri", uri: "https://example.com/b.png" },
+      ],
+      instruction: "x",
+    };
+    expect(operationParameterIdentity("vision.summarize", a)).not.toBe(
+      operationParameterIdentity("vision.summarize", c),
+    );
+  });
+
   it("忽略协议/追踪/认证元数据与 operation_id（请求身份非操作参数）", () => {
     const withTrace = {
       ...base,

@@ -107,6 +107,7 @@ describe("E2E：Legacy Family 协议冒烟", () => {
         "vision.session.create",
         "vision.session.delete",
         "vision.session.get",
+        "vision.summarize",
       ].sort(),
     );
   });

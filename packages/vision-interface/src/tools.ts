@@ -1,5 +1,5 @@
 /**
- * V1 工具清单（7 个）。inputSchema 供 Compatibility Layer 注册为 MCP Tool。
+ * V1 工具清单（9 个）。inputSchema 供 Compatibility Layer 注册为 MCP Tool。
  */
 import type { z } from "zod";
 import {
@@ -10,6 +10,7 @@ import {
   OperationGetArgs,
   SessionCreateArgs,
   SessionDeleteArgs,
+  SummarizeArgs,
   SessionGetArgs,
 } from "./args.js";
 
@@ -54,6 +55,14 @@ export function createVisionTools(): ToolSpec[] {
         "默认不主动输出主观评价；用户明确要求时，基于可观察特征参考普遍审美标准给出，并说明依据。" +
         "文字转录请用 vision.ocr。只陈述事实，不推断诊断。",
       inputSchema: ObserveArgs,
+    },
+    {
+      name: "vision.summarize",
+      description:
+        "批量图片综合概述：对 1~16 张图输出一篇散文式综合描述（共同主题、显著差异、整体印象），" +
+        "不逐张罗列细节，默认忽略水印等细小文字。任一图片不可读则整体失败并指明第几张。" +
+        "单张细节请用 vision.observe，文字转录请用 vision.ocr。",
+      inputSchema: SummarizeArgs,
     },
     {
       name: "vision.detect",

@@ -75,30 +75,41 @@ export function extractOperationParameters(
 
 /**
  * 应用级操作参数的最小语义归一化（审查 #9 部分采纳；Contract Clarification）：
- * - image_input.uri：按 WHATWG URL 归一（等价 URL 解析为相同身份）；
- * - image_input.inline.mime_type：小写 + 去参数；
+ * - image_input / image_inputs 数组元素：uri 按 WHATWG URL 归一（等价 URL 解析为相同身份）；
+ *   inline.mime_type 小写 + 去参数；
  * - 其余字段保持原样（完整语义等价规范化（默认值/数值形式等）记为已知限制，见 docs/DECISIONS.md）。
  */
+function normalizeImageInputField(imageInput: unknown): unknown {
+  if (typeof imageInput !== "object" || imageInput === null) return imageInput;
+  const img = imageInput as Record<string, unknown>;
+  if (img["type"] === "uri" && typeof img["uri"] === "string") {
+    try {
+      return { ...img, uri: new URL(img["uri"]).href };
+    } catch {
+      return img; // 非法 URI：保持原样（后续由 Fetch Boundary 事实化报错）
+    }
+  }
+  if (img["type"] === "inline" && typeof img["inline"] === "object" && img["inline"] !== null) {
+    const inline = img["inline"] as Record<string, unknown>;
+    if (typeof inline["mime_type"] === "string") {
+      return {
+        ...img,
+        inline: { ...inline, mime_type: inline["mime_type"].toLowerCase().split(";")[0]?.trim() ?? "" },
+      };
+    }
+  }
+  return img;
+}
+
 export function normalizeOperationArgs(args: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = { ...args };
   const imageInput = out["image_input"];
   if (typeof imageInput === "object" && imageInput !== null) {
-    const img = imageInput as Record<string, unknown>;
-    if (img["type"] === "uri" && typeof img["uri"] === "string") {
-      try {
-        out["image_input"] = { ...img, uri: new URL(img["uri"]).href };
-      } catch {
-        // 非法 URI：保持原样（后续由 Fetch Boundary 事实化报错）
-      }
-    } else if (img["type"] === "inline" && typeof img["inline"] === "object" && img["inline"] !== null) {
-      const inline = img["inline"] as Record<string, unknown>;
-      if (typeof inline["mime_type"] === "string") {
-        out["image_input"] = {
-          ...img,
-          inline: { ...inline, mime_type: inline["mime_type"].toLowerCase().split(";")[0]?.trim() ?? "" },
-        };
-      }
-    }
+    out["image_input"] = normalizeImageInputField(imageInput);
+  }
+  const imageInputs = out["image_inputs"];
+  if (Array.isArray(imageInputs)) {
+    out["image_inputs"] = imageInputs.map(normalizeImageInputField);
   }
   return out;
 }
