@@ -31,10 +31,12 @@ macOS/Linux 上如遇问题，欢迎反馈（附系统版本与报错信息）�
 1. **检查环境**：双击 `install.cmd`
    - 已有 Node.js → 直接继续（不覆盖你的任何环境）
    - 没有 → 脚本自动用 winget 安装（装不上会给官网链接）
-2. **设置密钥**（只经环境变量，绝不写入文件）：
-   ```
-   set AGNES_API_KEY=你的key
-   ```
+2. **配置视觉模型 Key**（只经环境变量，绝不写入文件；二选一）：
+   - **标准方式**（任意 OpenAI 兼容模型）：在 MCP Host 配置的 `env` 里设
+     `VISION_PROVIDERS_JSON`（JSON 数组，字段：providerId / apiKey / baseUrl /
+     model / displayName；示例见仓库 README）
+   - **快捷方式**（如 Agnes 免费模型）：`set AGNES_API_KEY=你的key`
+   （系统不预设默认模型，用哪个由你的配置决定）
 3. **接入 MCP Host**（如 Claude Desktop）：
    - 打开 Host 的 MCP 配置文件，参照 `config/claude-desktop.example.json`，
      `args` 里的路径改成你解压后的实际路径（`...\bin\lucida-vision-mcp.mjs`）
@@ -45,7 +47,9 @@ macOS/Linux 上如遇问题，欢迎反馈（附系统版本与报错信息）�
 ## 三步安装（macOS / Linux）
 
 1. **检查环境**：终端运行 `./install.sh`（没有 Node 时按提示安装）
-2. **设置密钥**：`export AGNES_API_KEY=你的key`
+2. **配置视觉模型 Key**（二选一，同 Windows 第 2 步）：
+   - 标准方式：`env` 里设 `VISION_PROVIDERS_JSON`（任意 OpenAI 兼容模型）
+   - 快捷方式：`export AGNES_API_KEY=你的key`（如 Agnes 免费模型）
 3. **接入 MCP Host**：同 Windows 第 3 步，`command: "node"`，`args` 指向
    `.../bin/lucida-vision-mcp.mjs`
 

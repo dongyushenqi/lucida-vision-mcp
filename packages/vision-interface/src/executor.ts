@@ -113,8 +113,8 @@ export class VisionExecutor {
     opts?: { defaultProviderId?: string; defaultInstruction?: string },
   ) {
     this.sandbox = new SessionSandbox(core);
-    this.defaultProviderId = opts?.defaultProviderId ?? "agnes";
     this.defaultInstruction = opts?.defaultInstruction ?? DEFAULT_OBSERVE_INSTRUCTION;
+    // 不预设默认模型：未指定 provider_id 时按注册顺序取第一个执行者（静态默认，非自动路由/故障转移）
     const providers = core.providers.all();
     this.defaultProviderId = opts?.defaultProviderId ?? providers[0]?.providerId ?? "";
   }

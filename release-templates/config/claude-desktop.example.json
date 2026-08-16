@@ -4,7 +4,7 @@
       "command": "node",
       "args": ["C:/绝对路径/lucida-vision-mcp/bin/lucida-vision-mcp.mjs"],
       "env": {
-        "AGNES_API_KEY": "你的key",
+        "VISION_PROVIDERS_JSON": "[{\"providerId\":\"my-vlm\",\"apiKey\":\"你的key\",\"baseUrl\":\"https://你的服务地址/v1\",\"model\":\"你的模型名\",\"displayName\":\"我的模型\"}]",
         "VISION_ALLOWED_URI_ORIGINS": ""
       }
     }

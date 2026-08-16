@@ -716,4 +716,36 @@ describe("vision.observe 默认指令（v0.1.3 校准）", () => {
     await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { instruction: "Agent 自定义指令" }));
     expect(provider.lastInstruction).toBe("Agent 自定义指令");
   });
+
+  it("不预设默认模型：多 Provider 时未指定 provider_id 按注册顺序取第一个；显式 provider_id 精确选择", async () => {
+    class SecondProvider extends MockProvider {
+      readonly providerId = "mock2";
+    }
+    const first = new MockProvider({ declared: DECLARED, verified: ["image_understanding"] });
+    const second = new SecondProvider({
+      declared: { ...DECLARED, provider: "mock2" },
+      verified: ["image_understanding"],
+    });
+    const core = new VisionCore({
+      store: new InMemoryVisionStore(),
+      fetchBoundary: new FetchBoundary(),
+      providers: [first, second],
+    });
+    core.capabilities.register(first.declare());
+    core.capabilities.register(second.declare());
+    core.capabilities.verify(await first.probe());
+    core.capabilities.verify(await second.probe());
+    const executor = new VisionExecutor(core);
+    const created = await call(executor, "vision.session.create", {});
+    const sessionId = (created.result.structured as { vision_session_id: string }).vision_session_id;
+
+    // 未指定 provider_id → 注册顺序第一个（静态默认，非自动路由）
+    await call(executor, "vision.observe", OBSERVE_ARGS(sessionId));
+    expect(first.calls).toBe(1);
+    expect(second.calls).toBe(0);
+
+    // 显式 provider_id → 精确选择第二个
+    await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { provider_id: "mock2" }));
+    expect(second.calls).toBe(1);
+  });
 });

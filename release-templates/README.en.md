@@ -40,10 +40,12 @@ If you hit an issue on macOS/Linux, please report it with your OS version and th
 1. **Check environment**: run `install.cmd`
    - Node.js already present → continue (your environment is never overwritten)
    - Not present → the script auto-installs via winget (falls back to the official link)
-2. **Set your API key** (environment variable only, never written to disk):
-   ```
-   set AGNES_API_KEY=your-key
-   ```
+2. **Configure your vision model key** (environment variable only, never written to disk; pick one):
+   - **Standard** (any OpenAI-compatible model): set `VISION_PROVIDERS_JSON`
+     in the host config's `env` (JSON array — providerId / apiKey / baseUrl /
+     model / displayName; examples in the repo README)
+   - **Shortcut** (e.g. the free Agnes model): `set AGNES_API_KEY=your-key`
+   (No default model is preset — your configuration decides.)
 3. **Connect to an MCP host** (e.g., Claude Desktop):
    - Open the host's MCP config file, see `config/claude-desktop.example.json`,
      and point `args` to your extracted path (`...\bin\lucida-vision-mcp.mjs`)
@@ -54,7 +56,9 @@ You can also run `start.cmd` directly to verify the server boots.
 ## Install in 3 Steps (macOS / Linux)
 
 1. **Check environment**: run `./install.sh` in a terminal (follow the hints if Node is missing)
-2. **Set your API key**: `export AGNES_API_KEY=your-key`
+2. **Configure your vision model key** (pick one, same as Windows step 2):
+   - Standard: set `VISION_PROVIDERS_JSON` in `env` (any OpenAI-compatible model)
+   - Shortcut: `export AGNES_API_KEY=your-key` (e.g. the free Agnes model)
 3. **Connect to an MCP host**: same as Windows step 3 — `command: "node"`,
    `args` pointing to `.../bin/lucida-vision-mcp.mjs`
 

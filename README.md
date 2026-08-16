@@ -38,7 +38,7 @@ The capability ceiling is exactly the model you attach. What the model cannot do
 
 Requires Node.js ≥ 24.
 
-**Step 1**: merge this into your MCP host config (example: `claude_desktop_config.json` for Claude Desktop):
+**Step 1**: merge this into your MCP host config (example: `claude_desktop_config.json` for Claude Desktop), replacing `my-vlm` with your vision model:
 
 ```json
 {
@@ -47,12 +47,14 @@ Requires Node.js ≥ 24.
       "command": "npx",
       "args": ["-y", "lucida-vision-mcp"],
       "env": {
-        "AGNES_API_KEY": "your vision model API key"
+        "VISION_PROVIDERS_JSON": "[{\"providerId\":\"my-vlm\",\"apiKey\":\"your vision model API key\",\"baseUrl\":\"https://your-endpoint/v1\",\"model\":\"your-model\",\"displayName\":\"My VLM\"}]"
       }
     }
   }
 }
 ```
+
+> Want to try free first? Just set `AGNES_API_KEY` (the free Agnes vision model — a shortcut, switch to any other model anytime).
 
 > On Windows, if `npx` fails to start, use `"command": "cmd"` with `args` `["/c", "npx", "-y", "lucida-vision-mcp"]`.
 
@@ -71,7 +73,7 @@ You can also install globally and use the `lucida-vision-mcp` command directly: 
 
 No model is preset — your configuration decides. Two ways:
 
-**Shortcut** (single model) — set `AGNES_API_KEY`; it defaults to the free Agnes vision model. Point `AGNES_BASE_URL` / `AGNES_VISION_MODEL` at any OpenAI-compatible service.
+**Shortcut** (single model, optional) — set `AGNES_API_KEY` to use the free Agnes vision model (or point `AGNES_BASE_URL` / `AGNES_VISION_MODEL` at any OpenAI-compatible service). A convenience entry, **not a default** — switch anytime.
 
 **Standard** (multiple models) — set `VISION_PROVIDERS_JSON` (a JSON array, one entry per vendor). The Agent explicitly picks the executor via the `provider_id` argument; the server never auto-routes:
 
@@ -83,6 +85,8 @@ No model is preset — your configuration decides. Two ways:
 ]
 ```
 
+**No default model**: when multiple providers are registered and a call omits `provider_id`, the first registered provider executes (a static default, not auto-routing).
+
 Each provider's capabilities are verified by probes: once at boot, then re-verified every 24 hours. Capabilities a model does not support (e.g. structured detection on some models) are honestly reported as not executable.
 
 Non-OpenAI-compatible protocols (Anthropic / Gemini native APIs, etc.) need one adapter class — see [docs/PROVIDERS.md](docs/PROVIDERS.md).
@@ -91,9 +95,9 @@ Non-OpenAI-compatible protocols (Anthropic / Gemini native APIs, etc.) need one 
 
 | Variable | Default | Description |
 |---|---|---|
-| `VISION_PROVIDERS_JSON` | — | Multi-provider configuration (JSON array) |
-| `AGNES_API_KEY` | — | Single-model shortcut (backward-compatible entry) |
-| `AGNES_BASE_URL` / `AGNES_VISION_MODEL` | Agnes defaults | Override the shortcut's endpoint and model |
+| `VISION_PROVIDERS_JSON` | — | Multi-provider configuration (JSON array, the standard way) |
+| `AGNES_API_KEY` | — | Single-model shortcut (optional; e.g. the free Agnes model). For general use see `VISION_PROVIDERS_JSON` |
+| `AGNES_BASE_URL` / `AGNES_VISION_MODEL` | Agnes defaults | Override the shortcut's endpoint and model (any OpenAI-compatible service) |
 | `VISION_PROBE_ON_BOOT` | `true` | Run capability probes at startup |
 | `VISION_PROBE_INTERVAL_HOURS` | `24` | Probe re-verification interval (hours) |
 | `VISION_ALLOWED_URI_ORIGINS` | empty | Allowlist of origins the server may fetch images from (comma-separated, SSRF protection) |
@@ -177,7 +181,7 @@ MIT
 
 要求 Node.js ≥ 24。
 
-**第 1 步**：把下面的片段并入 MCP Host 配置（以 Claude Desktop 的 `claude_desktop_config.json` 为例）：
+**第 1 步**：把下面的片段并入 MCP Host 配置（以 Claude Desktop 的 `claude_desktop_config.json` 为例），把 `my-vlm` 换成你的视觉模型信息：
 
 ```json
 {
@@ -186,12 +190,14 @@ MIT
       "command": "npx",
       "args": ["-y", "lucida-vision-mcp"],
       "env": {
-        "AGNES_API_KEY": "你的视觉模型 API Key"
+        "VISION_PROVIDERS_JSON": "[{\"providerId\":\"my-vlm\",\"apiKey\":\"你的视觉模型 API Key\",\"baseUrl\":\"https://你的服务地址/v1\",\"model\":\"你的模型名\",\"displayName\":\"我的模型\"}]"
       }
     }
   }
 }
 ```
+
+> 想先免费体验？只设 `AGNES_API_KEY` 即可（Agnes 免费模型，快捷方式，随时可换其他模型）。
 
 > Windows 上如果 `npx` 启动失败，把 `command` 换成 `cmd`、`args` 改为 `["/c", "npx", "-y", "lucida-vision-mcp"]`。
 
@@ -210,7 +216,7 @@ MIT
 
 系统不预设任何模型，用哪个模型完全由你的配置决定。两种写法：
 
-**快捷方式**（单模型）——设置 `AGNES_API_KEY`，默认接 Agnes 免费视觉模型；可用 `AGNES_BASE_URL`、`AGNES_VISION_MODEL` 指向任意 OpenAI 兼容服务。
+**快捷方式**（单模型，可选）——设 `AGNES_API_KEY` 即可接入 Agnes 免费视觉模型；也可用 `AGNES_BASE_URL`、`AGNES_VISION_MODEL` 指向任意 OpenAI 兼容服务。这只是一个简便入口，**不是默认模型**，随时可换。
 
 **标准方式**（多模型）——设置 `VISION_PROVIDERS_JSON`（JSON 数组，每家一条），Agent 通过 `provider_id` 参数显式选择由谁执行，服务端不做自动路由：
 
@@ -222,6 +228,8 @@ MIT
 ]
 ```
 
+**不预设默认模型**：多个 Provider 并存、且调用未指定 `provider_id` 时，按注册顺序取第一个作为执行者（静态默认，非自动路由/故障转移）。
+
 每个 Provider 的能力由"探针"实测验证：启动时一次，此后每 24 小时复验。模型不支持的能力（例如部分模型不支持结构化检测），对应工具会如实返回不可执行。
 
 非 OpenAI 兼容协议（Anthropic / Gemini 原生接口等）需要写一个适配器类，见 [docs/PROVIDERS.md](docs/PROVIDERS.md)。
@@ -230,9 +238,9 @@ MIT
 
 | 变量 | 默认值 | 说明 |
 |---|---|---|
-| `VISION_PROVIDERS_JSON` | — | 多 Provider 配置（JSON 数组） |
-| `AGNES_API_KEY` | — | 单模型快捷配置（向后兼容入口） |
-| `AGNES_BASE_URL` / `AGNES_VISION_MODEL` | Agnes 默认值 | 覆盖快捷方式的接口地址与模型 |
+| `VISION_PROVIDERS_JSON` | — | 多 Provider 配置（JSON 数组，标准方式） |
+| `AGNES_API_KEY` | — | 单模型快捷入口（可选；如 Agnes 免费模型）。通用配置见 `VISION_PROVIDERS_JSON` |
+| `AGNES_BASE_URL` / `AGNES_VISION_MODEL` | Agnes 官方端点/模型 | 覆盖快捷方式的服务地址与模型（可指向任意 OpenAI 兼容服务） |
 | `VISION_PROBE_ON_BOOT` | `true` | 启动时运行能力探针 |
 | `VISION_PROBE_INTERVAL_HOURS` | `24` | 探针复验间隔（小时） |
 | `VISION_ALLOWED_URI_ORIGINS` | 空 | 服务端取图的来源白名单（逗号分隔，SSRF 防护） |
