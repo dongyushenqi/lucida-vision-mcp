@@ -24,11 +24,12 @@ Text-only models cannot see images. lucida-vision-mcp acts as their "visual orga
 
 The capability ceiling is exactly the model you attach. What the model cannot do, the tools honestly report as "not executable" — never fabricated.
 
-## The 9 tools
+## The 10 tools
 
 | Tool | What it does |
 |---|---|
 | `vision.session.create` / `.get` / `.delete` | Session management (authorization sandbox and isolation unit for observations) |
+| `vision.session.audit` | Session audit summary (professional, on-demand only): operation trail (time / tool / status / provider / failure reasons); `include_observations=true` adds full observation metadata (location = region correspondence) |
 | `vision.observe` | General visual observation, returns evidence text; `json_mode=true` returns structured output (if verified for that model) |
 | `vision.summarize` | Batch overview: 1–16 images → one prose-style summary (common themes, differences, overall impression), no per-image listing |
 | `vision.ocr` | Extracts text from the image |
@@ -182,11 +183,12 @@ MIT
 
 能力上限就是你所接入的模型。模型做不到的，工具如实返回"不可执行"，绝不编造。
 
-## 提供的 9 个工具
+## 提供的 10 个工具
 
 | 工具 | 作用 |
 |---|---|
 | `vision.session.create` / `.get` / `.delete` | 会话管理（观察的授权沙箱与隔离单位） |
+| `vision.session.audit` | Session 审计汇总（专业模块，按需调用）：操作记录（时间/工具/状态/执行者/失败原因）；`include_observations=true` 附全量观察元数据（location 即区域对应） |
 | `vision.observe` | 通用视觉观察，返回视觉证据文本；`json_mode=true` 时返回结构化观察（需该模型验证通过） |
 | `vision.summarize` | 批量综合概述：1~16 张图 → 一篇散文式描述（共同主题/差异/整体印象），不逐张罗列 |
 | `vision.ocr` | 提取图中的文字 |

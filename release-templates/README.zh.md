@@ -9,7 +9,7 @@
 - 通过标准 MCP 协议，让不具备识图能力的 AI 获得视觉感知：看图、提取文字、结构化检测；
 - 任意 OpenAI 兼容视觉模型都可接入（通义千问、豆包、GPT、Agnes 等），**不预设默认模型**；
 - 每次观察带溯源：哪个模型、什么版本、何时看的；能力先经探针实测再开放，模型做不到的如实报"不可执行"，绝不编造；
-- 提供 9 个工具：`vision.observe`（观察）、`vision.summarize`（1~16 张图批量综合概述）、`vision.ocr`（文字提取）、`vision.detect`（结构化检测）、`vision.session.*`（会话）、`vision.operation.*`（任务查询/取消）。
+- 提供 10 个工具：`vision.observe`（观察）、`vision.summarize`（1~16 张图批量综合概述）、`vision.ocr`（文字提取）、`vision.detect`（结构化检测）、`vision.session.*`（会话与审计）、`vision.operation.*`（任务查询/取消）。
 
 ## 能力与边界
 

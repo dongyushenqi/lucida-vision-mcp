@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   ApplicationErrorCode,
+  VisionError,
   type CapabilityId,
   type DeclaredCapability,
   type VerifiedCapability,
@@ -1012,5 +1013,73 @@ describe("vision.observe 声明式结构化观察（v0.3）", () => {
     const second = await call(executor, "vision.observe", args);
     expect(second.deduplicated).toBe(true);
     expect(provider.calls).toBe(1);
+  });
+});
+
+describe("vision.session.audit 审计汇总（v0.4 专业模块，按需调用）", () => {
+  it("空 Session → 操作列表为空，返回 Session 元数据", async () => {
+    const { executor, sessionId } = await makeEnv();
+    const res = await call(executor, "vision.session.audit", { vision_session_id: sessionId });
+    expect(res.result.isError).toBe(false);
+    const s = res.result.structured as {
+      vision_session_id: string;
+      operation_count: number;
+      operations: unknown[];
+    };
+    expect(s.vision_session_id).toBe(sessionId);
+    expect(s.operation_count).toBe(0);
+    expect(s.operations).toEqual([]);
+  });
+
+  it("observe + ocr 后：操作记录按时间排序，含状态/执行者/观察 id", async () => {
+    const { executor, sessionId } = await makeEnv({ verified: ["image_understanding", "ocr"] });
+    await call(executor, "vision.observe", OBSERVE_ARGS(sessionId));
+    await call(executor, "vision.ocr", OBSERVE_ARGS(sessionId));
+    const res = await call(executor, "vision.session.audit", { vision_session_id: sessionId });
+    const s = res.result.structured as { operation_count: number; operations: any[] };
+    expect(s.operation_count).toBe(2);
+    expect(s.operations[0]!.tool_name).toBe("vision.observe");
+    expect(s.operations[1]!.tool_name).toBe("vision.ocr");
+    expect(s.operations[0]!.status).toBe("completed");
+    expect(s.operations[0]!.provider).toBe("mock");
+    expect(s.operations[0]!.observations).toBeUndefined(); // 默认不给观察元数据
+  });
+
+  it("include_observations=true：附观察全量元数据（label/location/source，区域对应）", async () => {
+    const { executor, sessionId } = await makeEnv({ verified: ["image_understanding"] });
+    await call(executor, "vision.observe", OBSERVE_ARGS(sessionId));
+    const res = await call(executor, "vision.session.audit", {
+      vision_session_id: sessionId,
+      include_observations: true,
+    });
+    const s = res.result.structured as { operations: any[] };
+    const obs = s.operations[0]!.observations as Array<{
+      observation_id: string;
+      label: string;
+      location: { type: string };
+      source: { provider: string };
+    }>;
+    expect(obs).toHaveLength(1);
+    expect(obs[0]!.label).toBe("visual_evidence");
+    expect(obs[0]!.location.type).toBe("full_image");
+    expect(obs[0]!.source.provider).toBe("mock");
+  });
+
+  it("失败操作：error 如实呈现；不可执行操作：executability 呈现", async () => {
+    const { executor, sessionId } = await makeEnv({
+      verified: ["image_understanding"],
+      failWith: new VisionError(ApplicationErrorCode.PROVIDER_UNAVAILABLE, "provider down"),
+    });
+    await call(executor, "vision.observe", OBSERVE_ARGS(sessionId));
+    const res = await call(executor, "vision.session.audit", { vision_session_id: sessionId });
+    const s = res.result.structured as { operations: any[] };
+    expect(s.operations[0]!.status).toBe("failed");
+    expect(s.operations[0]!.error.application_error_code).toBe(ApplicationErrorCode.PROVIDER_UNAVAILABLE);
+  });
+
+  it("其他 Principal → 拒绝（沙箱隔离）", async () => {
+    const { executor, sessionId } = await makeEnv();
+    const res = await call(executor, "vision.session.audit", { vision_session_id: sessionId }, OTHER_IDENTITY);
+    expect(res.result.isError).toBe(true);
   });
 });

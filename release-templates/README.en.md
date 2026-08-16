@@ -9,7 +9,7 @@ A pair of eyes for text-only AI: a general-purpose visual perception MCP server.
 - Gives vision to AI without native image understanding via the standard MCP protocol: describe, extract text, structured detection;
 - Any OpenAI-compatible vision model works (Qwen, Doubao, GPT, Agnes, etc.) — **no default model is preset**;
 - Every observation is sourced: which model, which version, when it looked. Capabilities open only after probe verification; what a model cannot do is honestly reported as "not executable" — never fabricated;
-- 9 tools: `vision.observe` (observe), `vision.summarize` (batch overview of 1–16 images), `vision.ocr` (text), `vision.detect` (structured detection), `vision.session.*` (sessions), `vision.operation.*` (query/cancel tasks).
+- 10 tools: `vision.observe` (observe), `vision.summarize` (batch overview of 1–16 images), `vision.ocr` (text), `vision.detect` (structured detection), `vision.session.*` (sessions and audit), `vision.operation.*` (query/cancel tasks).
 
 ## Capabilities and boundaries
 

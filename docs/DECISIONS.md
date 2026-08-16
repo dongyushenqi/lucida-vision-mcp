@@ -92,3 +92,9 @@ Frozen Contract 不可在此变更；新问题必须归类为五类之一：
 
 ### 路线（一座碑一座碑）
 v0.2.1（profile 指令预设 + instruction 第一接口文档化）→ v0.3（声明式结构化观察）→ v0.4（按需：审计导出/区域对应）。
+
+## v0.4 Session 审计（2026-08 决策）
+- 工具：`vision.session.audit`（第 10 个工具，专业模块）。
+- **按需调用，绝不主动输出**：仅当用户明确要求审计/记录/汇总/导出时，Agent 才调用；无明确指示时不产生、不附带任何审计内容（与"识别≠深入分析"同一哲学：一切能力按需服务，绝不自动升级）。
+- 被调用时：默认返回操作级汇总（时间/工具/状态/执行者/失败原因）；`include_observations=true` 附已提交观察的全量元数据（label/location/confidence/limitations/source；location 即区域对应，detect 的 bbox 原样呈现）。
+- 数据来源：既有 Operation/Observation 记录（retention 窗口内：操作 7 天/证据 24h，超出自动清理后审计自然截断，如实呈现）。

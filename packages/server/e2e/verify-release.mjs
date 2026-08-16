@@ -19,7 +19,7 @@ await client.connect(transport);
 
 const tools = await client.listTools();
 console.log(`bundle tools: ${tools.tools.length}`);
-if (tools.tools.length !== 9) {
+if (tools.tools.length !== 10) {
   console.error("FAIL: 工具数不对");
   process.exit(1);
 }

@@ -1,5 +1,5 @@
 /**
- * V1 工具清单（9 个）。inputSchema 供 Compatibility Layer 注册为 MCP Tool。
+ * V1 工具清单（10 个）。inputSchema 供 Compatibility Layer 注册为 MCP Tool。
  */
 import type { z } from "zod";
 import {
@@ -8,6 +8,7 @@ import {
   OcrArgs,
   OperationCancelArgs,
   OperationGetArgs,
+  SessionAuditArgs,
   SessionCreateArgs,
   SessionDeleteArgs,
   SummarizeArgs,
@@ -47,6 +48,14 @@ export function createVisionTools(): ToolSpec[] {
       name: "vision.session.delete",
       description: "关闭 Vision Session（已提交证据按 retention 保留）。",
       inputSchema: SessionDeleteArgs,
+    },
+    {
+      name: "vision.session.audit",
+      description:
+        "Session 审计汇总（专业模块，按需调用）：仅当用户明确要求审计/记录/汇总/导出时使用，绝不主动输出。" +
+        "默认返回操作级汇总（时间/工具/状态/执行者/失败原因）；include_observations=true 附已提交观察的完整元数据" +
+        "（label/location/confidence/limitations/source，location 即区域对应）。",
+      inputSchema: SessionAuditArgs,
     },
     {
       name: "vision.observe",

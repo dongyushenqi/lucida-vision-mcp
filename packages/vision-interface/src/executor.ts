@@ -38,6 +38,7 @@ import {
   OcrArgs,
   OperationCancelArgs,
   OperationGetArgs,
+  SessionAuditArgs,
   SessionCreateArgs,
   SessionDeleteArgs,
   SessionGetArgs,
@@ -190,6 +191,8 @@ export class VisionExecutor {
         return this.sessionGet(req, this.parse(SessionGetArgs, req));
       case "vision.session.delete":
         return this.sessionDelete(req, this.parse(SessionDeleteArgs, req));
+      case "vision.session.audit":
+        return this.sessionAudit(req, this.parse(SessionAuditArgs, req));
       case "vision.observe":
         return this.runVisual(req, this.parse(ObserveArgs, req), "observe");
       case "vision.summarize":
@@ -223,6 +226,71 @@ export class VisionExecutor {
         tenant_id: session.tenant_id,
         status: session.status,
         created_at: session.created_at,
+      }),
+    };
+  }
+
+  /**
+   * Session 审计汇总（v0.4 专业模块）：
+   * 按需调用——仅当用户明确要求审计/记录/汇总/导出时使用，绝不主动输出。
+   * 默认返回操作级汇总；include_observations=true 附已提交观察的全量元数据（区域对应 location）。
+   */
+  private async sessionAudit(req: ExecuteRequest, args: SessionAuditArgs): Promise<ExecuteResponse> {
+    this.sandbox.authorize(args.vision_session_id, req.identity);
+    const session = this.core.sessions.get(args.vision_session_id);
+    const operations = [...this.core.store.listOperations(args.vision_session_id)].sort(
+      (a, b) => a.created_at.localeCompare(b.created_at) || a.operation_id.localeCompare(b.operation_id),
+    );
+    const ops = operations.map((op) => {
+      const entry: Record<string, unknown> = {
+        operation_id: op.operation_id,
+        tool_name: op.tool_name,
+        status: op.status,
+        created_at: op.created_at,
+        started_at: op.started_at,
+        finished_at: op.finished_at,
+      };
+      // 执行结果元数据：执行者 / 能力不可执行评估（诚实呈现，非错误）
+      const result = op.result as { provider?: unknown; executable?: unknown; reasons?: unknown } | undefined;
+      if (result && typeof result === "object") {
+        if (typeof result.provider === "string") entry.provider = result.provider;
+        if (typeof result.executable === "boolean") {
+          entry.executability = {
+            executable: result.executable,
+            reasons: Array.isArray(result.reasons) ? result.reasons : [],
+          };
+        }
+      }
+      if (op.error) entry.error = op.error;
+      // 区域对应与观察元数据（仅显式要求时）
+      if (args.include_observations && op.committed_observation_ids.length > 0) {
+        const observations = op.committed_observation_ids
+          .map((id) => this.core.store.getObservation(id))
+          .filter(
+            (o): o is { sessionId: string; observation: Observation } =>
+              o !== undefined && o.sessionId === args.vision_session_id,
+          )
+          .map(({ observation: o }) => ({
+            observation_id: o.observation_id,
+            label: o.label,
+            location: o.location,
+            confidence: o.confidence,
+            limitations: o.limitations,
+            source: o.source,
+          }));
+        if (observations.length > 0) entry.observations = observations;
+      }
+      return entry;
+    });
+    return {
+      result: this.result({
+        vision_session_id: args.vision_session_id,
+        principal_id: session?.principal_id,
+        tenant_id: session?.tenant_id,
+        status: session?.status,
+        created_at: session?.created_at,
+        operation_count: operations.length,
+        operations: ops,
       }),
     };
   }

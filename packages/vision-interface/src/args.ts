@@ -33,6 +33,18 @@ export const SessionGetArgs = z
   })
   .strict();
 
+/**
+ * Session 审计汇总（v0.4 专业模块）：按需调用——仅当用户明确要求审计/记录/汇总/导出时使用，
+ * 绝不主动输出。被调用时默认返回操作级汇总；include_observations=true 附全量观察元数据。
+ */
+export const SessionAuditArgs = z
+  .object({
+    vision_session_id: visionSessionId,
+    /** true 时附每条操作已提交观察的元数据（label/location/confidence/limitations/source；location 即区域对应） */
+    include_observations: z.boolean().optional(),
+  })
+  .strict();
+
 export const SessionDeleteArgs = z
   .object({
     vision_session_id: visionSessionId,
@@ -115,6 +127,7 @@ export const OperationCancelArgs = z
 
 export type SessionCreateArgs = z.infer<typeof SessionCreateArgs>;
 export type SessionGetArgs = z.infer<typeof SessionGetArgs>;
+export type SessionAuditArgs = z.infer<typeof SessionAuditArgs>;
 export type SessionDeleteArgs = z.infer<typeof SessionDeleteArgs>;
 export type ObserveArgs = z.infer<typeof ObserveArgs>;
 export type DetectArgs = z.infer<typeof DetectArgs>;
