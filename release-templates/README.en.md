@@ -15,6 +15,7 @@ A pair of eyes for text-only AI: a general-purpose visual perception MCP server.
 
 - **Ceiling = the attached model.** A model looking at an image directly is always at least as capable as the same model used through this server — we make seeing auditable, traceable, and honest, never stronger;
 - **Subject-focused by default**: the main subject is described, watermarks and minor signage are ignored; use `vision.ocr` when you need text;
+- **Recognition ≠ deep analysis**: recognizing the image type (invoice / design drawing / doodle, …) is a native ability of default observation; deep analysis happens only when the user explicitly asks for "more professional / deeper";
 - **No fabrication**: unseen things are not invented, uncertainty is flagged; subjective evaluation is not volunteered by default and, when explicitly requested, is grounded in observable features;
 - **Positioning**: lightweight production-grade for individuals and small teams; no multi-tenant, rate limiting, or distributed features.
 

@@ -118,6 +118,11 @@ Full positioning statement, differences from skills and similar MCPs, architectu
 
 ## Professional use (instruction first, then profile)
 
+**The mode is decided by "whether depth is requested" — never by image type**:
+
+- **Default mode**: no explicit instruction, or an explicit "default / simple / general mode" request → concise general observation. Recognizing what an image is (invoice, design drawing, child's doodle, …) is the model's native ability and comes out in default observation — but **recognition ≠ deep analysis**; the default only gives a general description.
+- **Professional mode**: entered only when the main AI understands from natural language that the user wants "more professional / deeper / more structured" — only then do deep analysis and structured evidence happen.
+
 - **First interface: the `instruction` argument** — declare observation requirements and constraints in plain language (e.g. "describe only visible geometry, no inference" or "OCR all visible text, keep layout"). This is the main channel for any depth of observation.
 - **Second interface: `profile: "deep"`** — a preset deep-observation instruction bundle (includes watermarks, small text, fine-grained features). Use it only when the user explicitly asks for "deeper / more professional"; without an explicit request the default always applies.
 - **Third interface: `observation_schema` (declarative structured observation)** — declare the dimensions to observe (e.g. `{"dimensions": ["color", "shape", "count"]}`); the server returns per-dimension `value` or `unknown` with an evidence-state `reason` (six-enum closed set). Structure is server-enforced: undeclared keys or invalid reasons are honestly reported as `structured_parse_failed`, while field-level `unknown` is legitimate evidence. Requires a model that passes the structured-output probe. It declares *what to observe and how to express it* — never reasoning or decisions.
@@ -270,6 +275,11 @@ MIT
 完整的项目定位声明、与 skill 及同类 MCP 的差异、架构与包布局，见 [docs/OVERVIEW.md](docs/OVERVIEW.md)。
 
 ## 专业化用法（先 instruction，再 profile）
+
+**模式由「是否要求深度」决定，与图像类型无关**：
+
+- **默认模式**：用户没有明确指示，或明确说「一般模式/默认模式/简单模式」→ 摘要级一般观察。识别图像是什么（发票、设计图、涂鸦……）是模型的天然能力，默认观察就会说出来——但**识别 ≠ 深入分析**，默认只做一般性描述；
+- **专业模式**：只有当主 AI 从自然语言中理解到用户要求「更专业/更深入/更结构化」时，才进入——此时才有深入分析、结构化证据。
 
 - **第一接口：`instruction` 参数**——直接用自然语言声明观察要求与约束（例如「只描述可见的几何结构，不做推断」「对所有可见文字做 OCR 并保持布局」）。这是专业化的主通道，任何深度要求都可以写在这里。
 - **第二接口：`profile: "deep"`**——预置的深入观察指令包（纳入水印、细小文字、细粒度特征）。**仅当用户明确要求「更深入/更专业」时使用**；无明确指示一律 default。
