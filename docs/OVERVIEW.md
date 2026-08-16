@@ -11,7 +11,7 @@
 **诚实的边界**：
 
 1. **上限 = 所接 VLM**。同一个模型直接看图的能力，永远不低于「模型 + 本系统」的组合：本系统不"加戏"也不"变强"，只是让"看"这个过程可审计、可溯源、不撒谎。
-2. **不同于简单 skill**。skill 是"提示词 + 脚本"；本系统是协议级基础设施——标准 MCP 协议、Session/Operation/Observation 领域模型、能力探针、Provenance 审计、幂等与取消契约、SSRF/授权安全边界、schema 版本化、154+ 自动化测试。
+2. **不同于简单 skill**。skill 是"提示词 + 脚本"；本系统是协议级基础设施——标准 MCP 协议、Session/Operation/Observation 领域模型、能力探针、Provenance 审计、幂等与取消契约、SSRF/授权安全边界、schema 版本化、166+ 自动化测试。
 3. **不同于同类视觉 MCP**。能力探针（声明能力 ∩ 实测能力）、每次观察记录模型版本与时间戳（不可变溯源）、服务端取图受 SSRF 与来源策略双重防护、取消绝不销毁已提交证据。
 4. **轻量生产级**。具备个人/小团队可直接投入使用的工程标准（测试、三平台 CI、错误码体系、审计、安全边界、npm/zip/源码三种发布形态）。尚不包含企业级能力（多租户认证、并发限流、数据保留期自动清理、分布式部署）——如需再补。
 5. **精细识别取决于所接 VLM**。本系统不预设默认模型，用哪个模型由你的配置决定，各家能力经探针验证后如实披露。以开发期接入的 Agnes（免费模型）为例：精细描述与 OCR 已实测通过，结构化检测未通过探针，工具如实报告"不可执行"；换用更强模型后，能力矩阵由探针自动重验。
@@ -53,11 +53,11 @@ Vision Core                        ← Observation 图谱 / Operation 生命周�
 ## 测试状态
 
 - [x] M0 contracts（领域契约）— 33 测试
-- [x] M1 vision-core（图谱 / Operation / Fetch Boundary / IQA / Provider Adapter）— 72 测试
-- [x] M2 vision-interface（8 个工具 + 幂等 + 沙箱）— 28 测试
-- [x] M3 compatibility + server（Legacy Family + stdio + 发布包）— 21 测试
+- [x] M1 vision-core（图谱 / Operation / Fetch Boundary / IQA / Provider Adapter）— 81 测试
+- [x] M2 vision-interface（8 个工具 + 幂等 + 沙箱）— 29 测试
+- [x] M3 compatibility + server（Legacy Family + stdio + 发布包）— 23 测试
 - [x] M4 E2E 冒烟验收（InMemoryTransport 协议级 + stdio 真实子进程 + 发布包 bundle 握手）
-- 合计 154 个测试全绿（`pnpm test`）；CI 在 Windows / macOS / Linux 三平台自动运行
+- 合计 166 个测试全绿（`pnpm test`）；CI 在 Windows / macOS / Linux 三平台自动运行
 
 ## 真实 Provider 测试（需 API Key，Key 绝不入库）
 
