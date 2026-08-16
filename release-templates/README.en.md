@@ -9,13 +9,14 @@ A pair of eyes for text-only AI: a general-purpose visual perception MCP server.
 - Gives vision to AI without native image understanding via the standard MCP protocol: describe, extract text, structured detection;
 - Any OpenAI-compatible vision model works (Qwen, Doubao, GPT, Agnes, etc.) — **no default model is preset**;
 - Every observation is sourced: which model, which version, when it looked. Capabilities open only after probe verification; what a model cannot do is honestly reported as "not executable" — never fabricated;
-- 10 tools: `vision.observe` (observe), `vision.summarize` (batch overview of 1–16 images), `vision.ocr` (text), `vision.detect` (structured detection), `vision.session.*` (sessions and audit), `vision.operation.*` (query/cancel tasks).
+- 10 tools: `vision.observe` (observe), `vision.summarize` (batch overview of 1–16 images; honestly states actual coverage when it cannot cover all), `vision.ocr` (text), `vision.detect` (structured detection), `vision.session.*` (sessions and audit), `vision.operation.*` (query/cancel tasks).
 
 ## Capabilities and boundaries
 
 - **Ceiling = the attached model.** A model looking at an image directly is always at least as capable as the same model used through this server — we make seeing auditable, traceable, and honest, never stronger;
 - **Subject-focused by default**: the main subject is described, watermarks and minor signage are ignored; use `vision.ocr` when you need text;
 - **Recognition ≠ deep analysis**: recognizing the image type (invoice / design drawing / doodle, …) is a native ability of default observation; deep analysis happens only when the user explicitly asks for "more professional / deeper";
+- **Honesty and inference (balanced)**: unseen things are never fabricated; reasonable inferences grounded in visible evidence may use hedges like "looks like / may be" (e.g. bright light → may be daytime); precise judgments without visual evidence (exact shooting time, place names) are not output; light-touch inferences about temperament may be hedged; `vision.summarize` honestly states its actual coverage when it cannot cover all input images;
 - **No fabrication**: unseen things are not invented, uncertainty is flagged; subjective evaluation is not volunteered by default and, when explicitly requested, is grounded in observable features;
 - **Positioning**: lightweight production-grade for individuals and small teams; no multi-tenant, rate limiting, or distributed features.
 
