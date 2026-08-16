@@ -72,7 +72,8 @@ export function createVisionTools(): ToolSpec[] {
       name: "vision.summarize",
       description:
         "批量图片综合概述：对 1~16 张图输出一段平实事实化的综合描述（共同主题、显著差异、整体印象），" +
-        "不逐张罗列细节，默认忽略水印等细小文字；只陈述可观察事实，不推断拍摄时间/地点等环境信息。" +
+        "不逐张罗列细节，默认忽略水印等细小文字；只陈述可观察事实。**若未能覆盖全部输入图片，" +
+        "输出必须如实声明实际覆盖范围**（如「仅覆盖前 4 张」），不得假装已分析全部。" +
         "profile=deep 时纳入水印/细小文字异同的深入比较。任一图片不可读则整体失败并指明第几张。" +
         "单张细节请用 vision.observe，文字转录请用 vision.ocr。",
       inputSchema: SummarizeArgs,

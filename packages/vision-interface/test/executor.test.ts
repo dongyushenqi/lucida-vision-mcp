@@ -782,13 +782,15 @@ describe("vision.summarize（批量综合概述）", () => {
     expect(ins).toContain("共 2 张");
     expect(ins).toContain("不要逐张罗列");
     expect(ins).toContain("水印与细小标识");
-    // v0.4.1 校准（平衡版）：平实自然 + 合理推断带限定词 + 无证据精确判断禁止
+    // v0.4.1 校准（平衡版）：平实自然 + 合理推断带限定词 + 无证据精确判断禁止 + 覆盖范围诚实
     expect(ins).toContain("平实自然的语言");
     expect(ins).toContain("不必刻意干燥");
     expect(ins).toContain("可能是白天");
     expect(ins).toContain("具体拍摄时间");
     expect(ins).toContain("轻推断");
     expect(ins).toContain("不编造");
+    expect(ins).toContain("实际覆盖范围");
+    expect(ins).toContain("不得假装已分析全部图片");
     const s = res.result.structured as { observations: { label: string }[]; provider: string };
     expect(s.observations).toHaveLength(1);
     expect(s.observations[0]!.label).toBe("summary");
