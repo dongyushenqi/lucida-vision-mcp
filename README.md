@@ -113,7 +113,7 @@ Non-OpenAI-compatible protocols (Anthropic / Gemini native APIs, etc.) need one 
 - **Ceiling = the attached model.** A model looking at an image directly is always at least as capable as the same model used through this server — we never embellish or enhance; we make seeing auditable, traceable, and honest.
 - **Never lies.** Capabilities open up only after probe verification; unverified ones are honestly reported as "not executable".
 - **Auditable.** Every observation records model, version, and timestamp — immutably.
-- **Positioning.** Lightweight production-grade for individuals and small teams (166 tests, 3-platform CI, error-code system, audit and security boundaries); enterprise features (multi-tenant, rate limiting, distributed deployment) are out of scope.
+- **Positioning.** Lightweight production-grade for individuals and small teams (205 tests, 3-platform CI, error-code system, audit and security boundaries); enterprise features (multi-tenant, rate limiting, distributed deployment) are out of scope.
 
 Full positioning statement, differences from skills and similar MCPs, architecture and package layout: [docs/OVERVIEW.md](docs/OVERVIEW.md).
 
@@ -153,7 +153,7 @@ Full positioning statement, differences from skills and similar MCPs, architectu
 ```bash
 pnpm install
 pnpm build
-pnpm test    # 166 tests; real-API cases run when a key is present, auto-skip otherwise
+pnpm test    # 205 tests; real-API cases run when a key is present, auto-skip otherwise
 ```
 
 ## License
@@ -273,7 +273,7 @@ MIT
 - **上限 = 所接模型**。同一个模型直接看图的能力，永远不低于「模型 + 本系统」的组合——本系统不"加戏"、不"变强"，只是让"看"可审计、可溯源、不撒谎。
 - **不撒谎**。能力先经探针实测再开放；未验证的能力一律如实报"不可执行"。
 - **可审计**。每次观察记录模型、版本与时间戳，不可篡改。
-- **定位**。个人与小团队可直接使用的轻量生产级（166 个测试、三平台 CI、错误码体系、审计与安全边界）；不含多租户、限流、分布式等企业能力。
+- **定位**。个人与小团队可直接使用的轻量生产级（205 个测试、三平台 CI、错误码体系、审计与安全边界）；不含多租户、限流、分布式等企业能力。
 
 完整的项目定位声明、与 skill 及同类 MCP 的差异、架构与包布局，见 [docs/OVERVIEW.md](docs/OVERVIEW.md)。
 
@@ -313,7 +313,7 @@ MIT
 ```bash
 pnpm install
 pnpm build
-pnpm test    # 166 个测试；需真实 API 的用例：有 Key 自动跑，无 Key 自动跳过
+pnpm test    # 205 个测试；需真实 API 的用例：有 Key 自动跑，无 Key 自动跳过
 ```
 
 ## License
