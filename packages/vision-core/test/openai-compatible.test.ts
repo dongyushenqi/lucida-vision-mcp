@@ -130,7 +130,8 @@ describe("OpenAICompatibleAdapter：多厂商通用性", () => {
   it("declare：max_image_size 从配置计算（审查：与 Server Fetch 上限同步，不写死）", () => {
     const adapter = makeAdapter({ maxImageSize: 2048 });
     expect(adapter.declare().constraints.max_image_size).toBe(2048);
-    expect(adapter.declare().constraints.max_images_per_request).toBe(1); // 单图输入诚实声明
+    // 多图能力如实声明（协议层 content 数组实际可传输；单图模型经 maxImagesPerRequest=1 配置收窄）
+    expect(adapter.declare().constraints.max_images_per_request).toBe(16);
   });
 
   it("成功路径：providerMeta 携带 providerId 与模型标识", async () => {
@@ -193,6 +194,27 @@ describe("OpenAICompatibleAdapter：多厂商通用性", () => {
     expect(elapsed).toBeLessThan(150);
     expect(verified.capabilities).toContain("image_understanding");
     expect(verified.capabilities).toContain("ocr");
+  });
+
+  it("多图声明如实：max_images_per_request 缺省 16，可配置收窄为 1", () => {
+    const def = makeAdapter({});
+    expect((def.declare().constraints as Record<string, unknown>)["max_images_per_request"]).toBe(16);
+    const single = makeAdapter({ maxImagesPerRequest: 1 });
+    expect((single.declare().constraints as Record<string, unknown>)["max_images_per_request"]).toBe(1);
+  });
+
+  it("429 限流纳入有界重试：429 → 重试一次后成功", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 429, ok: false } as Response)
+      .mockResolvedValueOnce(okResponse("看到一只猫"));
+    const adapter = makeAdapter({}, fetchImpl as unknown as typeof fetch);
+    const r = await adapter.execute(
+      { images: [], instruction: "x", jsonMode: false },
+      new AbortController().signal,
+    );
+    expect(r.text).toBe("看到一只猫");
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("取消信号中止请求", async () => {

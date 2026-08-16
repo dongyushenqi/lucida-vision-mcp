@@ -395,12 +395,18 @@ export class VisionExecutor {
       this.inflight.set(this.inflightKey(sessionId, operationId), req.cancel);
 
       // 图像解析：uri/inline 走统一 Fetch Boundary；resource_ref 先授权后 dereference。
-      // summarize 批量解析：有界并发（默认 4，防内存/I/O 洪峰；不拒绝任何输入，任一失败 → 整体失败）
+      // summarize 批量解析：有界并发（默认 4，防瞬时洪峰）；任一失败 → 中止其余在飞 worker，整体快速失败
       const images =
         kind === "summarize"
           ? await boundedResolve(
               args.image_inputs ?? [],
-              (input) => this.resolveImage(input, sessionId, req.identity, req.cancel.signal),
+              (input, _i, sig) =>
+                this.resolveImage(
+                  input,
+                  sessionId,
+                  req.identity,
+                  AbortSignal.any([req.cancel.signal, sig]),
+                ),
             )
           : [await this.resolveImage(args.image_input!, sessionId, req.identity, req.cancel.signal)];
 
@@ -583,6 +589,20 @@ export class VisionExecutor {
       return {
         executable: false,
         reasons: missing.map((c) => `能力 ${c} 未通过验证，当前输入不可执行`),
+        provider: provider.providerId,
+        constraints,
+      };
+    }
+    // 批量图片数门禁（v0.4 审查修复）：Provider 声明的 max_images_per_request 如实生效，
+    // 只支持单图的 Provider 在 summarize 超限时被提前拦截（能力不撒谎）
+    const maxImages =
+      typeof constraints?.["max_images_per_request"] === "number"
+        ? (constraints["max_images_per_request"] as number)
+        : undefined;
+    if (maxImages !== undefined && images !== undefined && images.length > maxImages) {
+      return {
+        executable: false,
+        reasons: [`images_exceed_provider_limit(${maxImages})`],
         provider: provider.providerId,
         constraints,
       };
@@ -853,21 +873,46 @@ interface StructuredParseResult {
 const DEFAULT_MAX_STRUCTURED_OBJECTS = 500;
 
 /** unknown 证据状态枚举（v0.3 契约）：reason 是证据状态，unknown 是证据值 */
-/** 有界并发解析：按输入顺序产出结果，任一失败整体拒绝（错误原样上抛，不吞）。 */
+/**
+ * 有界并发解析：按输入顺序产出结果；任一失败 → 中止其余在飞 worker（失败即停，不等无谓请求），
+ * 首个真实错误原样上抛（后续 abort 异常被吞，不掩盖根因）。
+ */
 const BATCH_RESOLVE_CONCURRENCY = 4;
 
-async function boundedResolve<T, R>(items: T[], fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+async function boundedResolve<T, R>(
+  items: T[],
+  fn: (item: T, index: number, signal: AbortSignal) => Promise<R>,
+  outerSignal?: AbortSignal,
+): Promise<R[]> {
   const out: R[] = new Array(items.length);
   let next = 0;
-  const workers = Array.from({ length: Math.min(BATCH_RESOLVE_CONCURRENCY, items.length) }, async () => {
-    for (;;) {
-      const i = next;
-      next += 1;
-      if (i >= items.length) return;
-      out[i] = await fn(items[i]!, i);
-    }
-  });
-  await Promise.all(workers);
+  let firstError: unknown;
+  const controller = new AbortController();
+  const onOuterAbort = () => controller.abort();
+  outerSignal?.addEventListener("abort", onOuterAbort);
+  try {
+    const workers = Array.from({ length: Math.min(BATCH_RESOLVE_CONCURRENCY, items.length) }, async () => {
+      for (;;) {
+        if (controller.signal.aborted || firstError !== undefined) return;
+        const i = next;
+        next += 1;
+        if (i >= items.length) return;
+        try {
+          out[i] = await fn(items[i]!, i, controller.signal);
+        } catch (err) {
+          if (firstError === undefined) {
+            firstError = err;
+            controller.abort();
+          }
+          return;
+        }
+      }
+    });
+    await Promise.all(workers);
+  } finally {
+    outerSignal?.removeEventListener("abort", onOuterAbort);
+  }
+  if (firstError !== undefined) throw firstError;
   return out;
 }
 

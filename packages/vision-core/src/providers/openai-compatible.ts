@@ -33,7 +33,7 @@ export interface OpenAiCompatibleProviderConfig {
   model?: string;
   displayName?: string;
   timeoutMs?: number;
-  /** 5xx 有界重试次数（仅 500/502/503） */
+  /** 5xx/429 有界重试次数（429 限流同样有界退避；免费/并行探针场景防限流雪崩） */
   maxRetries?: number;
   temperature?: number;
   /** 可注入 fetch（单测用） */
@@ -42,6 +42,11 @@ export interface OpenAiCompatibleProviderConfig {
   extraConstraints?: Record<string, unknown>;
   /** 单图最大字节数（Declared constraints.max_image_size；应与 Server Fetch 上限一致） */
   maxImageSize?: number;
+  /**
+   * 单次请求最多图片数（Declared constraints.max_images_per_request；默认 16 = 协议层
+   * content 数组实际传输能力。具体模型若只支持单图，配置为 1 使 summarize 被门禁如实拦截）。
+   */
+  maxImagesPerRequest?: number;
   /** 响应文本最大字节数（防御异常/恶意 Provider 膨胀；超限 → PROVIDER_INVALID_RESPONSE） */
   maxResponseTextBytes?: number;
 }
@@ -53,7 +58,7 @@ const TEST_PNG_BASE64 =
 const JSON_PROBE_INSTRUCTION =
   '图中有一个红色正方形。仅输出 JSON，不要任何其他文字：{"objects":[{"label":"red_square","bbox":[x1,y1,x2,y2]}]}。若无法确定坐标则输出 {"objects":[]}。';
 
-const RETRYABLE_STATUS = new Set([500, 502, 503]);
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503]);
 
 export class OpenAICompatibleAdapter implements VLMProvider {
   readonly providerId: string;
@@ -78,6 +83,7 @@ export class OpenAICompatibleAdapter implements VLMProvider {
   private readonly extraConstraints: Record<string, unknown>;
   private readonly maxImageSize: number;
   private readonly maxResponseTextBytes: number;
+  private readonly maxImagesPerRequest: number;
 
   constructor(private readonly config: OpenAiCompatibleProviderConfig) {
     if (!config.providerId || !config.providerId.match(/^[a-z0-9_-]+$/)) {
@@ -94,6 +100,7 @@ export class OpenAICompatibleAdapter implements VLMProvider {
     this.extraConstraints = config.extraConstraints ?? {};
     this.maxImageSize = config.maxImageSize ?? 10 * 1024 * 1024;
     this.maxResponseTextBytes = config.maxResponseTextBytes ?? 1024 * 1024;
+    this.maxImagesPerRequest = config.maxImagesPerRequest ?? 16;
   }
 
   /** 声明能力（含 Scope and Constraints）。 */
@@ -104,7 +111,8 @@ export class OpenAICompatibleAdapter implements VLMProvider {
       constraints: {
         // max_image_size 与 Server Fetch 上限同步（审查：配置化后声明不得仍写死 10MB）
         max_image_size: this.maxImageSize,
-        max_images_per_request: 1,
+        // 多图能力如实声明（协议层 content 数组实际可传输；单图模型配置为 1 即被门禁拦截）
+        max_images_per_request: this.maxImagesPerRequest,
         supported_output_formats: ["text"],
         ...this.extraConstraints,
       },

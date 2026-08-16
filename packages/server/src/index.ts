@@ -52,6 +52,8 @@ export async function createServer(config: ServerConfig) {
         // Declared 约束与两个 Fetch 上限对齐（审查：取两者最小值，
         // 否则 URI 上限小于 inline 时声明偏大，反之 IQA 提前拒绝本可允许的 URI 图）
         maxImageSize: Math.min(config.maxInlineBytes, config.maxUriBytes),
+        // 单图模型显式配 1（maxImagesPerRequest）→ summarize 超限被门禁如实拦截
+        ...(p.maxImagesPerRequest !== undefined ? { maxImagesPerRequest: p.maxImagesPerRequest } : {}),
       }),
   );
   if (config.agnes.apiKey && !providers.some((p) => p.providerId === "agnes")) {
@@ -86,9 +88,9 @@ export async function createServer(config: ServerConfig) {
   // 启动探针：并行执行（审查 #8：慢 Provider 不再串行拖累其他 Provider 与启动）。
   // Probe 副作用边界：结果仅更新 Capability Registry，绝不产生 Observation（规格三.2）。
   // probeAsync=true：后台执行，服务器立即就绪，探针完成后自动开放能力（未验证期间工具如实报不可执行）。
-  const runProbes = (phase: "boot" | "refresh") =>
+  const runProbes = (targets: VLMProvider[], phase: "boot" | "refresh") =>
     Promise.all(
-      providers.map(async (provider) => {
+      targets.map(async (provider) => {
         try {
           const verified = await provider.probe(AbortSignal.timeout(config.probeTimeoutMs));
           core.capabilities.verify(verified);
@@ -105,10 +107,26 @@ export async function createServer(config: ServerConfig) {
       }),
     );
   if (config.probeOnBoot) {
-    if (config.probeAsync) {
-      void runProbes("boot");
-    } else {
-      await runProbes("boot");
+    // 复用持久化验证结果：Registry 已落盘，TTL 内（probeIntervalHours，0=永久）不重复探针，
+    // 避免每次重启都等完整探针；过期才重探。probeAsync 仍是显式逃生口。
+    const pending = providers.filter((provider) => {
+      const verified = core.capabilities.get(provider.providerId)?.verified;
+      if (!verified?.verified_at) return true;
+      const ageHours = (Date.now() - new Date(verified.verified_at).getTime()) / 3600_000;
+      if (config.probeIntervalHours === 0 || ageHours < config.probeIntervalHours) {
+        process.stderr.write(
+          `[mcp-vision] probe reused: provider=${provider.providerId} verified_at=${verified.verified_at}（TTL 内，跳过重探）\n`,
+        );
+        return false;
+      }
+      return true;
+    });
+    if (pending.length > 0) {
+      if (config.probeAsync) {
+        void runProbes(pending, "boot");
+      } else {
+        await runProbes(pending, "boot");
+      }
     }
   }
   // 能力 TTL 刷新（审查 #8）：按 VISION_PROBE_INTERVAL_HOURS（默认 24h，0=关闭）定时重探，
@@ -118,7 +136,7 @@ export async function createServer(config: ServerConfig) {
     const timer = setInterval(() => {
       if (refreshing) return;
       refreshing = true;
-      runProbes("refresh").finally(() => {
+      runProbes(providers, "refresh").finally(() => {
         refreshing = false;
       });
     }, config.probeIntervalHours * 3600_000);

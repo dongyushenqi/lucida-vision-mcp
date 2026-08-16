@@ -146,4 +146,19 @@ describe("VISION_PROVIDERS_JSON（多 Provider 装配）", () => {
     expect(cfg.providers).toHaveLength(1);
     expect(cfg.providers[0]).toMatchObject({ providerId: "gpt", model: "gpt-4o" });
   });
+
+  it("Provider maxImagesPerRequest：可配正整数；非法值回退 undefined", () => {
+    const ok = loadConfig({
+      VISION_PROVIDERS_JSON: JSON.stringify([{ providerId: "single", apiKey: "k", maxImagesPerRequest: 1 }]),
+    });
+    expect(ok.providers[0]!.maxImagesPerRequest).toBe(1);
+    const bad = loadConfig({
+      VISION_PROVIDERS_JSON: JSON.stringify([
+        { providerId: "a", apiKey: "k", maxImagesPerRequest: 0 },
+        { providerId: "b", apiKey: "k", maxImagesPerRequest: "3" },
+      ]),
+    });
+    expect(bad.providers[0]!.maxImagesPerRequest).toBeUndefined();
+    expect(bad.providers[1]!.maxImagesPerRequest).toBeUndefined();
+  });
 });

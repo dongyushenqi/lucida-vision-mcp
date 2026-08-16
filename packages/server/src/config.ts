@@ -8,6 +8,8 @@ export interface ProviderConfig {
   baseUrl?: string;
   model?: string;
   displayName?: string;
+  /** 单次请求最多图片数（单图模型设 1；缺省 16） */
+  maxImagesPerRequest?: number;
 }
 
 export interface ServerConfig {
@@ -126,6 +128,10 @@ export function parseProviders(raw: string | undefined): ProviderConfig[] {
         baseUrl: typeof rec["baseUrl"] === "string" ? rec["baseUrl"] : undefined,
         model: typeof rec["model"] === "string" ? rec["model"] : undefined,
         displayName: typeof rec["displayName"] === "string" ? rec["displayName"] : undefined,
+        maxImagesPerRequest:
+          typeof rec["maxImagesPerRequest"] === "number" && Number.isInteger(rec["maxImagesPerRequest"]) && rec["maxImagesPerRequest"] > 0
+            ? rec["maxImagesPerRequest"]
+            : undefined,
       });
     }
     return out;

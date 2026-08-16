@@ -840,6 +840,29 @@ describe("vision.summarize（批量综合概述）", () => {
     expect(provider.lastImages?.length).toBe(5);
     expect(provider.calls).toBe(1);
   });
+
+  it("多图门禁（审查修复）：Provider 声明 max_images_per_request=1 → summarize 2 图被如实拦截", async () => {
+    const provider = new MockProvider({
+      declared: { ...DECLARED, constraints: { max_images_per_request: 1 } },
+      verified: ["image_understanding"],
+    });
+    const core = new VisionCore({
+      store: new InMemoryVisionStore(),
+      fetchBoundary: new FetchBoundary(),
+      providers: [provider],
+    });
+    core.capabilities.register(provider.declare());
+    core.capabilities.verify(await provider.probe());
+    const executor = new VisionExecutor(core);
+    const created = await call(executor, "vision.session.create", {});
+    const sessionId = (created.result.structured as { vision_session_id: string }).vision_session_id;
+    const res = await call(executor, "vision.summarize", SUMMARY_ARGS(sessionId, 2));
+    expect(res.result.isError).toBe(false);
+    const s = res.result.structured as { executability: { executable: boolean; reasons: string[] } };
+    expect(s.executability.executable).toBe(false);
+    expect(s.executability.reasons.join()).toContain("images_exceed_provider_limit(1)");
+    expect(provider.calls).toBe(0); // 门禁在 Provider 调用前拦截
+  });
 });
 
 describe("vision.observe / summarize profile 档位（v0.2.1）", () => {
