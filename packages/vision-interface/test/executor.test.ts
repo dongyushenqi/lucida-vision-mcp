@@ -698,7 +698,8 @@ describe("vision.observe 默认指令（v0.1.3 校准）", () => {
     expect(ins).toContain("穿着打扮");
     expect(ins).toContain("默认不主动输出");
     expect(ins).toContain("不得以“主观”为由拒绝回答");
-    expect(ins).toContain("不推断、不编造");
+    expect(ins).toContain("不编造");
+    expect(ins).toContain("无视觉依据");
     // 旧指令的"文本与几何模式"全要素要求已移除
     expect(ins).not.toContain("文本与几何模式");
   });
@@ -781,11 +782,13 @@ describe("vision.summarize（批量综合概述）", () => {
     expect(ins).toContain("共 2 张");
     expect(ins).toContain("不要逐张罗列");
     expect(ins).toContain("水印与细小标识");
-    // v0.4.1 校准：平实事实化 + 环境推断禁令 + 气质推断禁令
-    expect(ins).toContain("平实直白的连贯文字");
-    expect(ins).toContain("不推断拍摄时间");
-    expect(ins).toContain("不得出现时间、季节、天气、地点等环境词汇");
-    expect(ins).toContain("不得推断人物气质、情绪或态度");
+    // v0.4.1 校准（平衡版）：平实自然 + 合理推断带限定词 + 无证据精确判断禁止
+    expect(ins).toContain("平实自然的语言");
+    expect(ins).toContain("不必刻意干燥");
+    expect(ins).toContain("可能是白天");
+    expect(ins).toContain("具体拍摄时间");
+    expect(ins).toContain("轻推断");
+    expect(ins).toContain("不编造");
     const s = res.result.structured as { observations: { label: string }[]; provider: string };
     expect(s.observations).toHaveLength(1);
     expect(s.observations[0]!.label).toBe("summary");
@@ -889,7 +892,8 @@ describe("vision.observe / summarize profile 档位（v0.2.1）", () => {
     expect(ins).toContain("水印");
     expect(ins).toContain("细小文字与标识");
     expect(ins).toContain("不得以“主观”为由拒绝回答");
-    expect(ins).toContain("不推断、不编造");
+    expect(ins).toContain("不编造");
+    expect(ins).toContain("无视觉依据");
   });
 
   it("profile=deep：summarize 使用深入概述指令包（含水印比较语义）", async () => {
