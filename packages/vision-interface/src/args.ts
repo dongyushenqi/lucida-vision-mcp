@@ -92,7 +92,7 @@ export const SummarizeArgs = z
     vision_session_id: visionSessionId,
     /** 待综合概述的图片（1~16 张；任一失败则整体失败并指明第几张） */
     image_inputs: z.array(ImageInput).min(1).max(MAX_SUMMARIZE_IMAGES),
-    /** 感知指令：缺省为综合概述默认指令（散文式、不逐张罗列、忽略水印等细碎元素） */
+    /** 感知指令：缺省为综合概述默认指令（平实连贯、不逐张罗列、忽略水印等细碎元素） */
     instruction: z.string().min(1).max(2000).optional(),
     /** 观察档位：deep=预置深入概述指令包；缺省 default */
     profile: ObserveProfile.optional(),

@@ -64,15 +64,16 @@ export function createVisionTools(): ToolSpec[] {
         "默认不主动输出主观评价；用户明确要求时，基于可观察特征参考普遍审美标准给出，并说明依据。" +
         "profile=deep 时预置深入指令（纳入水印/细小文字/细粒度特征；仅当用户明确要求更深入时使用）。" +
         "observation_schema 提供声明式结构化观察：声明维度（如 color/shape），逐字段返回 value 或 unknown+reason（须模型验证通过）。" +
+        "需要综合理解多张图片时，请优先使用 vision.summarize。" +
         "文字转录请用 vision.ocr。只陈述事实，不推断诊断。",
       inputSchema: ObserveArgs,
     },
     {
       name: "vision.summarize",
       description:
-        "批量图片综合概述：对 1~16 张图输出一篇散文式综合描述（共同主题、显著差异、整体印象），" +
-        "不逐张罗列细节，默认忽略水印等细小文字。profile=deep 时纳入水印/细小文字异同的深入比较。" +
-        "任一图片不可读则整体失败并指明第几张。" +
+        "批量图片综合概述：对 1~16 张图输出一段平实事实化的综合描述（共同主题、显著差异、整体印象），" +
+        "不逐张罗列细节，默认忽略水印等细小文字；只陈述可观察事实，不推断拍摄时间/地点等环境信息。" +
+        "profile=deep 时纳入水印/细小文字异同的深入比较。任一图片不可读则整体失败并指明第几张。" +
         "单张细节请用 vision.observe，文字转录请用 vision.ocr。",
       inputSchema: SummarizeArgs,
     },

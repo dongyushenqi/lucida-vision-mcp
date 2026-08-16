@@ -31,7 +31,7 @@ The capability ceiling is exactly the model you attach. What the model cannot do
 | `vision.session.create` / `.get` / `.delete` | Session management (authorization sandbox and isolation unit for observations) |
 | `vision.session.audit` | Session audit summary (professional, on-demand only): operation trail (time / tool / status / provider / failure reasons); `include_observations=true` adds full observation metadata (location = region correspondence) |
 | `vision.observe` | General visual observation, returns evidence text; `json_mode=true` returns structured output (if verified for that model) |
-| `vision.summarize` | Batch overview: 1–16 images → one prose-style summary (common themes, differences, overall impression), no per-image listing |
+| `vision.summarize` | Batch overview: 1–16 images → one plain, factual connected summary (common themes, differences, overall impression), no per-image listing |
 | `vision.ocr` | Extracts text from the image |
 | `vision.detect` | Structured detection for categories you declare, returns JSON bounding boxes (if verified for that model) |
 | `vision.operation.get` / `.cancel` | Query and cancel in-flight tasks; committed evidence is never destroyed by cancellation |
@@ -191,7 +191,7 @@ MIT
 | `vision.session.create` / `.get` / `.delete` | 会话管理（观察的授权沙箱与隔离单位） |
 | `vision.session.audit` | Session 审计汇总（专业模块，按需调用）：操作记录（时间/工具/状态/执行者/失败原因）；`include_observations=true` 附全量观察元数据（location 即区域对应） |
 | `vision.observe` | 通用视觉观察，返回视觉证据文本；`json_mode=true` 时返回结构化观察（需该模型验证通过） |
-| `vision.summarize` | 批量综合概述：1~16 张图 → 一篇散文式描述（共同主题/差异/整体印象），不逐张罗列 |
+| `vision.summarize` | 批量综合概述：1~16 张图 → 一段平实事实化的综合描述（共同主题/差异/整体印象），不逐张罗列 |
 | `vision.ocr` | 提取图中的文字 |
 | `vision.detect` | 按你声明的类别做结构化检测，返回 JSON 边界框（需该模型验证通过） |
 | `vision.operation.get` / `.cancel` | 查询与取消执行中的任务；已提交的证据不会被取消销毁 |
