@@ -781,9 +781,11 @@ describe("vision.summarize（批量综合概述）", () => {
     expect(ins).toContain("共 2 张");
     expect(ins).toContain("不要逐张罗列");
     expect(ins).toContain("水印与细小标识");
-    // v0.4.1 校准：平实事实化 + 环境推断禁令
+    // v0.4.1 校准：平实事实化 + 环境推断禁令 + 气质推断禁令
     expect(ins).toContain("平实直白的连贯文字");
     expect(ins).toContain("不推断拍摄时间");
+    expect(ins).toContain("不得出现时间、季节、天气、地点等环境词汇");
+    expect(ins).toContain("不得推断人物气质、情绪或态度");
     const s = res.result.structured as { observations: { label: string }[]; provider: string };
     expect(s.observations).toHaveLength(1);
     expect(s.observations[0]!.label).toBe("summary");
