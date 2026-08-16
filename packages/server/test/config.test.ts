@@ -93,6 +93,14 @@ describe("Server 配置", () => {
     expect(loadConfig({ VISION_DEFAULT_PROFILE: "deep" }).defaultProfile).toBe("deep");
     expect(loadConfig({ VISION_DEFAULT_PROFILE: "DEEP" }).defaultProfile).toBe("default");
   });
+
+  it("探针策略：后台开关缺省关；超时缺省 60s 可配", () => {
+    expect(loadConfig({}).probeAsync).toBe(false);
+    expect(loadConfig({ VISION_PROBE_ASYNC: "true" }).probeAsync).toBe(true);
+    expect(loadConfig({}).probeTimeoutMs).toBe(60_000);
+    expect(loadConfig({ VISION_PROBE_TIMEOUT_MS: "15000" }).probeTimeoutMs).toBe(15_000);
+    expect(loadConfig({ VISION_PROBE_TIMEOUT_MS: "abc" }).probeTimeoutMs).toBe(60_000);
+  });
 });
 
 describe("VISION_PROVIDERS_JSON（多 Provider 装配）", () => {

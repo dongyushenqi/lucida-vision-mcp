@@ -24,6 +24,8 @@ export interface ServerConfig {
   providers: ProviderConfig[];
   /** 启动时执行能力探针（受控验证，可能产生 API 成本） */
   probeOnBoot: boolean;
+  /** 后台探针：服务器立即就绪，探针完成后自动开放能力（默认 false：启动等探针完成） */
+  probeAsync: boolean;
   /** 探针总超时（ms） */
   probeTimeoutMs: number;
   /** 能力探针 TTL 刷新间隔（小时；0 = 关闭定时刷新，审查 #8） */
@@ -59,7 +61,8 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     },
     providers: parseProviders(env["VISION_PROVIDERS_JSON"]),
     probeOnBoot: env["VISION_PROBE_ON_BOOT"] !== "false",
-    probeTimeoutMs: 60_000,
+    probeAsync: env["VISION_PROBE_ASYNC"] === "true",
+    probeTimeoutMs: parsePositiveInt(env["VISION_PROBE_TIMEOUT_MS"], 60_000),
     probeIntervalHours: parseNonNegativeInt(env["VISION_PROBE_INTERVAL_HOURS"], 24),
     retentionHours: {
       operations: parseNonNegativeInt(env["VISION_RETENTION_OPERATIONS_HOURS"], 168),

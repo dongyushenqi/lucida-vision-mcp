@@ -146,6 +146,7 @@ Full positioning statement, differences from skills and similar MCPs, architectu
 ## Docs and development
 
 - [docs/OVERVIEW.md](docs/OVERVIEW.md) — positioning, architecture, package layout, test status
+- [CHANGELOG.md](CHANGELOG.md) — per-version bilingual change notes (what changed, how to use)
 - [docs/DECISIONS.md](docs/DECISIONS.md) — technical decision records
 - [docs/PROVIDERS.md](docs/PROVIDERS.md) — guide for adding new providers
 
@@ -305,6 +306,7 @@ MIT
 ## 文档与开发
 
 - [docs/OVERVIEW.md](docs/OVERVIEW.md) —— 项目定位、架构、包布局、测试状态
+- [CHANGELOG.md](CHANGELOG.md) —— 每版中英双语改动说明（改了什么、怎么用）
 - [docs/DECISIONS.md](docs/DECISIONS.md) —— 技术决策记录
 - [docs/PROVIDERS.md](docs/PROVIDERS.md) —— 接入新 Provider 指南
 

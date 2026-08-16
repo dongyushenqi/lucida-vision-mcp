@@ -238,8 +238,9 @@ export class VisionExecutor {
   private async sessionAudit(req: ExecuteRequest, args: SessionAuditArgs): Promise<ExecuteResponse> {
     this.sandbox.authorize(args.vision_session_id, req.identity);
     const session = this.core.sessions.get(args.vision_session_id);
-    const operations = [...this.core.store.listOperations(args.vision_session_id)].sort(
-      (a, b) => a.created_at.localeCompare(b.created_at) || a.operation_id.localeCompare(b.operation_id),
+    // 稳定排序（JS sort 稳定）：同一毫秒创建的操作保持存储插入顺序，避免随机 operation_id 打乱时序
+    const operations = [...this.core.store.listOperations(args.vision_session_id)].sort((a, b) =>
+      a.created_at.localeCompare(b.created_at),
     );
     const ops = operations.map((op) => {
       const entry: Record<string, unknown> = {
@@ -394,13 +395,12 @@ export class VisionExecutor {
       this.inflight.set(this.inflightKey(sessionId, operationId), req.cancel);
 
       // 图像解析：uri/inline 走统一 Fetch Boundary；resource_ref 先授权后 dereference。
-      // summarize 批量解析：任一图片失败 → 整体失败（诚实，不静默丢弃）
+      // summarize 批量解析：有界并发（默认 4，防内存/I/O 洪峰；不拒绝任何输入，任一失败 → 整体失败）
       const images =
         kind === "summarize"
-          ? await Promise.all(
-              (args.image_inputs ?? []).map((input) =>
-                this.resolveImage(input, sessionId, req.identity, req.cancel.signal),
-              ),
+          ? await boundedResolve(
+              args.image_inputs ?? [],
+              (input) => this.resolveImage(input, sessionId, req.identity, req.cancel.signal),
             )
           : [await this.resolveImage(args.image_input!, sessionId, req.identity, req.cancel.signal)];
 
@@ -851,6 +851,25 @@ interface StructuredParseResult {
 }
 
 const DEFAULT_MAX_STRUCTURED_OBJECTS = 500;
+
+/** unknown 证据状态枚举（v0.3 契约）：reason 是证据状态，unknown 是证据值 */
+/** 有界并发解析：按输入顺序产出结果，任一失败整体拒绝（错误原样上抛，不吞）。 */
+const BATCH_RESOLVE_CONCURRENCY = 4;
+
+async function boundedResolve<T, R>(items: T[], fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(BATCH_RESOLVE_CONCURRENCY, items.length) }, async () => {
+    for (;;) {
+      const i = next;
+      next += 1;
+      if (i >= items.length) return;
+      out[i] = await fn(items[i]!, i);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
 
 /** unknown 证据状态枚举（v0.3 契约）：reason 是证据状态，unknown 是证据值 */
 const UNKNOWN_REASONS = new Set([

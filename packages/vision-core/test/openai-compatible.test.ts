@@ -179,6 +179,22 @@ describe("OpenAICompatibleAdapter：多厂商通用性", () => {
     );
   });
 
+  it("探针并行执行：总耗时 ≈ 最慢单个探针（而非三次串行之和）", async () => {
+    const fetchImpl = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      return okResponse("看到一只猫");
+    });
+    const adapter = makeAdapter({}, fetchImpl as unknown as typeof fetch);
+    const start = Date.now();
+    const verified = await adapter.probe(new AbortController().signal);
+    const elapsed = Date.now() - start;
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    // 串行需 ≥180ms；并行 ≈60ms，断言 <150ms（留足 CI 抖动余量）
+    expect(elapsed).toBeLessThan(150);
+    expect(verified.capabilities).toContain("image_understanding");
+    expect(verified.capabilities).toContain("ocr");
+  });
+
   it("取消信号中止请求", async () => {
     const ac = new AbortController();
     const fetchImpl = vi.fn((_url: string, init: RequestInit) => {

@@ -832,6 +832,14 @@ describe("vision.summarize（批量综合概述）", () => {
     await call(executor, "vision.summarize", SUMMARY_ARGS(sessionId, 1, { instruction: "按顺序描述" }));
     expect(provider.lastInstruction).toBe("按顺序描述");
   });
+
+  it("有界并发批量：5 张图全部解析（按输入顺序），单次调用成功", async () => {
+    const { executor, sessionId, provider } = await makeEnv({ verified: ["image_understanding"] });
+    const res = await call(executor, "vision.summarize", SUMMARY_ARGS(sessionId, 5));
+    expect(res.result.isError).toBe(false);
+    expect(provider.lastImages?.length).toBe(5);
+    expect(provider.calls).toBe(1);
+  });
 });
 
 describe("vision.observe / summarize profile 档位（v0.2.1）", () => {

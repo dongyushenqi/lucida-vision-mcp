@@ -114,50 +114,52 @@ export class OpenAICompatibleAdapter implements VLMProvider {
   /**
    * 能力探针（受控验证，可能产生 API 成本；频率受 Server 策略限制）。
    * 结果仅用于更新 Capability Registry，严禁自动生成 Observation 注入图谱。
+   * 三个探针并行执行（性能优化：启动探针耗时从 3× 降为 ~1×；共享同一超时窗口）。
    */
   async probe(signal: AbortSignal): Promise<VerifiedCapability> {
     const testImage = { bytes: Buffer.from(TEST_PNG_BASE64, "base64"), mimeType: "image/png" };
+    const probes: Array<{ id: CapabilityId; run: () => Promise<boolean> }> = [
+      // Probe A：基础图像理解 —— 期望非空文本
+      {
+        id: "image_understanding",
+        run: async () => {
+          const r = await this.execute(
+            { images: [testImage], instruction: "描述这张图片", jsonMode: false },
+            signal,
+          );
+          return r.text.trim().length > 0;
+        },
+      },
+      // Probe B：OCR 指令预设 —— 期望非空文本（测试图无文字，模型应返回"无文字"类事实）
+      {
+        id: "ocr",
+        run: async () => {
+          const r = await this.execute(
+            { images: [testImage], instruction: "提取图中所有文字内容，若无文字请说明", jsonMode: false },
+            signal,
+          );
+          return r.text.trim().length > 0;
+        },
+      },
+      // Probe C：结构化检测（JSON bbox）—— 期望可解析坐标
+      {
+        id: "structured_detection",
+        run: async () => {
+          const r = await this.execute(
+            { images: [testImage], instruction: JSON_PROBE_INSTRUCTION, jsonMode: true },
+            signal,
+          );
+          return isBboxJson(r.text);
+        },
+      },
+    ];
+    // 并行执行：任一探针失败只影响 Verified 集合（Promise.allSettled），不抛错
+    const settled = await Promise.allSettled(probes.map((p) => p.run()));
     const verified: CapabilityId[] = [];
-
-    // Probe A：基础图像理解 —— 期望非空文本
-    try {
-      const r = await this.execute(
-        { images: [testImage], instruction: "描述这张图片", jsonMode: false },
-        signal,
-      );
-      if (r.text.trim().length > 0) {
-        verified.push("image_understanding");
-      }
-    } catch {
-      // 探针失败只影响 Verified 集合，不抛错
+    for (let i = 0; i < probes.length; i += 1) {
+      const s = settled[i];
+      if (s && s.status === "fulfilled" && s.value) verified.push(probes[i]!.id);
     }
-
-    // Probe B：OCR 指令预设 —— 期望非空文本（测试图无文字，模型应返回"无文字"类事实）
-    try {
-      const r = await this.execute(
-        { images: [testImage], instruction: "提取图中所有文字内容，若无文字请说明", jsonMode: false },
-        signal,
-      );
-      if (r.text.trim().length > 0) {
-        verified.push("ocr");
-      }
-    } catch {
-      // 同上
-    }
-
-    // Probe C：结构化检测（JSON bbox）—— 期望可解析坐标
-    try {
-      const r = await this.execute(
-        { images: [testImage], instruction: JSON_PROBE_INSTRUCTION, jsonMode: true },
-        signal,
-      );
-      if (isBboxJson(r.text)) {
-        verified.push("structured_detection");
-      }
-    } catch {
-      // 同上
-    }
-
     return {
       provider: this.providerId,
       capabilities: verified,
