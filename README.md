@@ -104,6 +104,7 @@ Non-OpenAI-compatible protocols (Anthropic / Gemini native APIs, etc.) need one 
 | `VISION_ALLOWED_URI_ORIGINS` | empty | Allowlist of origins the server may fetch images from (comma-separated, SSRF protection) |
 | `VISION_ALLOW_URI_SCHEMES` | `http,https,file` | URI scheme allowlist (comma-separated); `file` included by default for local images, removable for strict environments |
 | `VISION_ALLOW_PRIVATE_ADDRESSES` | `false` | Allow private/loopback addresses (for serving images over local HTTP; SSRF protection stays on by default) |
+| `VISION_DEFAULT_PROFILE` | `default` | Default observation profile (`deep` = deep-instruction preset; only for explicit deeper requests) |
 | `VISION_MAX_INLINE_BYTES` | `10485760` | Maximum inline image size (bytes) |
 
 ## Capabilities and boundaries
@@ -114,6 +115,13 @@ Non-OpenAI-compatible protocols (Anthropic / Gemini native APIs, etc.) need one 
 - **Positioning.** Lightweight production-grade for individuals and small teams (166 tests, 3-platform CI, error-code system, audit and security boundaries); enterprise features (multi-tenant, rate limiting, distributed deployment) are out of scope.
 
 Full positioning statement, differences from skills and similar MCPs, architecture and package layout: [docs/OVERVIEW.md](docs/OVERVIEW.md).
+
+## Professional use (instruction first, then profile)
+
+- **First interface: the `instruction` argument** — declare observation requirements and constraints in plain language (e.g. "describe only visible geometry, no inference" or "OCR all visible text, keep layout"). This is the main channel for any depth of observation.
+- **Second interface: `profile: "deep"`** — a preset deep-observation instruction bundle (includes watermarks, small text, fine-grained features). Use it only when the user explicitly asks for "deeper / more professional"; without an explicit request the default always applies.
+- **Trigger semantics**: the default is always the concise mode; only an explicit deeper request switches it. `profile` is an instruction preset — it never changes the model, failure policy, or other capabilities.
+- Deployments can set `VISION_DEFAULT_PROFILE=deep` as the baseline.
 
 ## Security
 
@@ -248,6 +256,7 @@ MIT
 | `VISION_ALLOWED_URI_ORIGINS` | 空 | 服务端取图的来源白名单（逗号分隔，SSRF 防护） |
 | `VISION_ALLOW_URI_SCHEMES` | `http,https,file` | URI scheme 白名单（逗号分隔）；默认含 `file` 支持本地取图，严格环境可显式去掉 |
 | `VISION_ALLOW_PRIVATE_ADDRESSES` | `false` | 放行私有/环回地址（本机 HTTP 提供图片的场景；SSRF 防护默认保持开启） |
+| `VISION_DEFAULT_PROFILE` | `default` | 默认观察档位（`deep`=深入指令包；仅用于明确的深入要求） |
 | `VISION_MAX_INLINE_BYTES` | `10485760` | 内联图像大小上限（字节） |
 
 ## 能力与边界
@@ -258,6 +267,13 @@ MIT
 - **定位**。个人与小团队可直接使用的轻量生产级（166 个测试、三平台 CI、错误码体系、审计与安全边界）；不含多租户、限流、分布式等企业能力。
 
 完整的项目定位声明、与 skill 及同类 MCP 的差异、架构与包布局，见 [docs/OVERVIEW.md](docs/OVERVIEW.md)。
+
+## 专业化用法（先 instruction，再 profile）
+
+- **第一接口：`instruction` 参数**——直接用自然语言声明观察要求与约束（例如「只描述可见的几何结构，不做推断」「对所有可见文字做 OCR 并保持布局」）。这是专业化的主通道，任何深度要求都可以写在这里。
+- **第二接口：`profile: "deep"`**——预置的深入观察指令包（纳入水印、细小文字、细粒度特征）。**仅当用户明确要求「更深入/更专业」时使用**；无明确指示一律 default。
+- **触发语义**：默认永远是摘要级；只有明确的深入要求才切换。`profile` 只是指令预设——不改变模型、不改变失败策略、不自动开启其他能力。
+- 部署方可用 `VISION_DEFAULT_PROFILE=deep` 设定基调。
 
 ## 安全
 

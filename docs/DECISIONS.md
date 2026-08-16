@@ -70,3 +70,25 @@ Frozen Contract 不可在此变更；新问题必须归类为五类之一：
 - Session 级并发队列深度（同上）
 - Retention 自动清理任务（Operation 7 天 / Artifact 24h 的定时器实现）
 - V1 工具实为 8 个（决策清单中"7 个"为笔误，实际枚举即 8 个：session.create/get/delete + observe/detect/ocr + operation.get/cancel）
+
+## v0.2.1 / v0.3 观察档位与结构化观察契约（2026-08 讨论收敛）
+
+### profile 定位（v0.2.1）
+- `profile: "default" | "deep"`（工具参数，缺省 default；服务端 `VISION_DEFAULT_PROFILE` 定部署基调）。
+- **Profile 是指令预设（instruction preset），不是能力预设（capability preset）**：deep 只替换发给 VLM 的默认指令（纳入水印/细小文字/细粒度特征），
+  绝不自动开启结构化观察、不增加观察维度、不切换模型、不改变失败策略、不启用其他工具。
+- 触发语义：**仅当用户明确要求"更深入/更深层次/更专业"时才由 Agent 传递 profile=deep；无明确指示一律 default**。服务器不做自动检测/自动升级。
+- `instruction`（Agent 显式提供）优先级高于 profile；`VISION_DEFAULT_INSTRUCTION` 仅作用于 default 档。
+
+### v0.3 声明式结构化观察契约（Decisions，实现前钉死）
+1. **两级门禁**：Declared Dimension → 能力探针验证（未验证 → NOT_EXECUTABLE）→ 当前输入 IQA（不可执行 → NOT_EXECUTABLE）→ 观察 → 逐字段 value/unknown。
+   探针通过 ≠ 当前图片一定可可靠观察；探针只验证"能力存在"，可执行性由 IQA 逐次判定（对应 V3.7：Declared → Verified → Effective → Final Executable）。
+2. **unknown 是证据值，reason 是证据状态**：字段级 unknown 必须携带 reason，枚举（封闭）：
+   `insufficient_visual_evidence` / `occluded` / `ambiguous` / `not_applicable` / `unsupported` / `execution_unavailable`。
+   其中 `unsupported`（维度未获探针支持）与 `execution_unavailable`（服务器/运行时不可执行）必须与普通视觉 unknown 严格区分——Agent 不得把"模型看到了但判断不了"与"服务器没有能力执行"混为一谈。
+3. **DSL 边界**：声明式能力只允许描述"观察什么 + 结果以什么结构表达"；禁止推理/组合/筛选/比较/决策语义（如"若红色区域超过 30% 则判定……"属于大脑职责，挡在 Vision Server 之外）。
+4. **失败语义两级**：字段 unknown（模型明说无法确定，合法证据）与整体 parse_failed（结构损坏/截断，如实失败）并行，各守其位。
+5. **能力准入测试（长期原则）**：新增功能的唯一准入问题是"这是否是一个新的视觉事实获取能力？"；涉及判断/决策/审核语义的请求一律挡在边界外。
+
+### 路线（一座碑一座碑）
+v0.2.1（profile 指令预设 + instruction 第一接口文档化）→ v0.3（声明式结构化观察）→ v0.4（按需：审计导出/区域对应）。

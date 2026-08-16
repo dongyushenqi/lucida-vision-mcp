@@ -38,6 +38,8 @@ export interface ServerConfig {
   allowPrivateAddresses: boolean;
   /** 默认观察指令（Agent 未提供 instruction 时使用；缺省为内置校准版） */
   defaultObserveInstruction?: string;
+  /** 默认观察档位（缺省 default；deep 仅当用户明确要求时使用） */
+  defaultProfile: "default" | "deep";
   /** Fetch Boundary 大小限制（字节） */
   maxInlineBytes: number;
   maxUriBytes: number;
@@ -70,6 +72,7 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     allowedUriSchemes: parseSchemes(env["VISION_ALLOW_URI_SCHEMES"]),
     allowPrivateAddresses: env["VISION_ALLOW_PRIVATE_ADDRESSES"] === "true",
     defaultObserveInstruction: trimToUndefined(env["VISION_DEFAULT_INSTRUCTION"]),
+    defaultProfile: env["VISION_DEFAULT_PROFILE"] === "deep" ? "deep" : "default",
     maxInlineBytes: parsePositiveInt(env["VISION_MAX_INLINE_BYTES"], 10 * 1024 * 1024),
     maxUriBytes: parsePositiveInt(env["VISION_MAX_URI_BYTES"], 10 * 1024 * 1024),
   };

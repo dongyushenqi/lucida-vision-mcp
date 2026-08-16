@@ -61,6 +61,33 @@ export const DEFAULT_SUMMARIZE_INSTRUCTION =
   "可参考普遍审美标准，并说明支撑评价的可见依据；分歧空间可如实提及，但不得以“主观”为由拒绝回答。\n" +
   "不推断、不编造：观察不到的不虚构；不确定的明确标注不确定；职业、健康状况、拍摄意图等推断不得输出。";
 
+/**
+ * 深入观察指令（profile=deep 预置包；仅当用户明确要求"更深入/更专业"时使用）。
+ * 与默认档同一校准原则（主观三档 / 不推断不编造），差异仅在观察粒度：
+ * 水印、细小文字与标识默认纳入，细粒度特征如实给出。指令预设，非能力预设。
+ */
+export const DEFAULT_DEEP_OBSERVE_INSTRUCTION =
+  "深入观察这张图片，描述全部可观察的客观特征，务必包含通常会被忽略的细节：" +
+  "水印、招牌、细小文字与标识（含其位置与内容）、材质与纹理、光线与阴影、细微差异。" +
+  "主体是什么就描述什么（人物/风景/物品等），一切可观察的形态、颜色、质感、比例、细节都是事实；" +
+  "示例仅为示意，切勿局限于示例，也不得编造示例之外类别的特征。\n" +
+  "主观评价（美丑、性感、魅力等）因人而异，但存在多数人的审美共识：" +
+  "默认不主动输出；当用户明确要求时，基于可观察的客观特征给出评价，" +
+  "可参考普遍审美标准，并说明支撑评价的可见依据；分歧空间可如实提及，但不得以“主观”为由拒绝回答。\n" +
+  "不推断、不编造：观察不到的不虚构；不确定的明确标注不确定；职业、健康状况、拍摄意图等推断不得输出。";
+
+/**
+ * 深入综合概述指令（summarize + profile=deep 预置包）：纳入水印/细小文字的异同比较，分主题组织，不逐张罗列。
+ */
+export const DEFAULT_DEEP_SUMMARIZE_INSTRUCTION =
+  "综合概述这批图片（共 {n} 张），深入比较：共同出现的全部显著特征与差异（含水印、招牌、细小文字与标识的异同）、" +
+  "细节差异、整体印象。用连贯的散文呈现，可以分主题组织，但不要为每张图单独罗列段落。" +
+  "只描述可观察的客观特征，必须如实给出。\n" +
+  "主观评价（美丑、性感、魅力等）因人而异，但存在多数人的审美共识：" +
+  "默认不主动输出；当用户明确要求时，基于可观察的客观特征给出评价，" +
+  "可参考普遍审美标准，并说明支撑评价的可见依据；分歧空间可如实提及，但不得以“主观”为由拒绝回答。\n" +
+  "不推断、不编造：观察不到的不虚构；不确定的明确标注不确定；职业、健康状况、拍摄意图等推断不得输出。";
+
 /** 默认观察指令（仅当 Agent 未提供 instruction 时使用；v0.1.3 校准版）：
  * 聚焦图片主体；水印/细小标识默认不转录；客观特征必须如实描述；
  * 主观评价默认不主动输出，用户明确要求时基于可观察特征按审美共识给出；
@@ -109,6 +136,7 @@ interface VisualArgs {
   operation_id?: string;
   json_mode?: boolean;
   instruction?: string;
+  profile?: "default" | "deep";
   labels?: string[];
   lang?: string;
 }
@@ -118,6 +146,8 @@ export class VisionExecutor {
   private readonly defaultProviderId: string;
   /** 默认观察/概述指令（VISION_DEFAULT_INSTRUCTION 注入，可为空；各工具回落各自内置默认） */
   private readonly defaultInstruction?: string;
+  /** 默认观察档位（VISION_DEFAULT_PROFILE 注入；缺省 default；deep 仅当用户明确要求时使用） */
+  private readonly defaultProfile: "default" | "deep";
   /** in-flight 取消映射（审查 #1）：operation_id → 执行中的 CancellationTokenSource */
   private readonly inflight = new Map<string, CancellationTokenSource>();
   /** 本请求结构化解析是否发生截断（膨胀防御，随 summary 输出后复位） */
@@ -125,11 +155,13 @@ export class VisionExecutor {
 
   constructor(
     private readonly core: VisionCore,
-    opts?: { defaultProviderId?: string; defaultInstruction?: string },
+    opts?: { defaultProviderId?: string; defaultInstruction?: string; defaultProfile?: "default" | "deep" },
   ) {
     this.sandbox = new SessionSandbox(core);
     // VISION_DEFAULT_INSTRUCTION 注入（可为空）；各工具按需回落各自的默认指令
     this.defaultInstruction = opts?.defaultInstruction;
+    // VISION_DEFAULT_PROFILE 注入（缺省 default；deep 仅当用户明确要求时使用）
+    this.defaultProfile = opts?.defaultProfile ?? "default";
     // 不预设默认模型：未指定 provider_id 时按注册顺序取第一个执行者（静态默认，非自动路由/故障转移）
     const providers = core.providers.all();
     this.defaultProviderId = opts?.defaultProviderId ?? providers[0]?.providerId ?? "";
@@ -508,15 +540,19 @@ export class VisionExecutor {
   }
 
   private buildInstruction(kind: VisualKind, args: VisualArgs): string {
+    // 优先级：Agent 显式 instruction > profile 档位（deep=预置深入指令包）> env 默认指令 > 内置默认
+    const profile = args.profile ?? this.defaultProfile;
     switch (kind) {
       case "observe":
-        return args.instruction ?? this.defaultInstruction ?? DEFAULT_OBSERVE_INSTRUCTION;
-      case "summarize":
-        return (
-          args.instruction ??
-          this.defaultInstruction ??
-          DEFAULT_SUMMARIZE_INSTRUCTION.replace("{n}", String(args.image_inputs?.length ?? 0))
-        );
+        if (args.instruction) return args.instruction;
+        if (profile === "deep") return DEFAULT_DEEP_OBSERVE_INSTRUCTION;
+        return this.defaultInstruction ?? DEFAULT_OBSERVE_INSTRUCTION;
+      case "summarize": {
+        const n = String(args.image_inputs?.length ?? 0);
+        if (args.instruction) return args.instruction;
+        if (profile === "deep") return DEFAULT_DEEP_SUMMARIZE_INSTRUCTION.replace("{n}", n);
+        return this.defaultInstruction ?? DEFAULT_SUMMARIZE_INSTRUCTION.replace("{n}", n);
+      }
       case "detect": {
         const labels = (args.labels ?? []).join("、");
         return (

@@ -87,6 +87,12 @@ describe("Server 配置", () => {
     expect(loadConfig({ VISION_DEFAULT_INSTRUCTION: "只看主体" }).defaultObserveInstruction).toBe("只看主体");
     expect(loadConfig({ VISION_DEFAULT_INSTRUCTION: "  " }).defaultObserveInstruction).toBeUndefined();
   });
+
+  it("默认观察档位：缺省 default；仅显式 'deep' 开启", () => {
+    expect(loadConfig({}).defaultProfile).toBe("default");
+    expect(loadConfig({ VISION_DEFAULT_PROFILE: "deep" }).defaultProfile).toBe("deep");
+    expect(loadConfig({ VISION_DEFAULT_PROFILE: "DEEP" }).defaultProfile).toBe("default");
+  });
 });
 
 describe("VISION_PROVIDERS_JSON（多 Provider 装配）", () => {

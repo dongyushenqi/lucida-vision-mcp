@@ -160,6 +160,7 @@ export async function createServer(config: ServerConfig) {
 
   const executor = new VisionExecutor(core, {
     defaultInstruction: config.defaultObserveInstruction,
+    defaultProfile: config.defaultProfile,
   });
   const legacy = new LegacyFamilyServer({
     executor,

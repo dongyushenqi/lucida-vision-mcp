@@ -4,6 +4,9 @@
 import { z } from "zod";
 import { ImageInput } from "@mcp-vision/contracts";
 
+/** 观察档位：default=默认摘要级；deep=预置深入指令包（仅当用户明确要求更深入/更专业时使用；指令预设，非能力预设） */
+export const ObserveProfile = z.enum(["default", "deep"]);
+
 const visionSessionId = z.string().min(1);
 const operationId = z.string().min(1);
 const providerId = z.string().min(1);
@@ -28,6 +31,8 @@ export const ObserveArgs = z
     image_input: ImageInput,
     /** 感知指令：必须只请求可观察的视觉事实；缺省为中性感知指令 */
     instruction: z.string().min(1).max(2000).optional(),
+    /** 观察档位：deep=预置深入指令包（纳入水印/细小文字/细粒度特征）；缺省 default */
+    profile: ObserveProfile.optional(),
     /** 可选 JSON 模式：结构化观察输出（须经 probe 验证 structured_detection） */
     json_mode: z.boolean().optional(),
     provider_id: providerId.optional(),
@@ -57,6 +62,8 @@ export const SummarizeArgs = z
     image_inputs: z.array(ImageInput).min(1).max(MAX_SUMMARIZE_IMAGES),
     /** 感知指令：缺省为综合概述默认指令（散文式、不逐张罗列、忽略水印等细碎元素） */
     instruction: z.string().min(1).max(2000).optional(),
+    /** 观察档位：deep=预置深入概述指令包；缺省 default */
+    profile: ObserveProfile.optional(),
     provider_id: providerId.optional(),
     operation_id: operationId.optional(),
   })

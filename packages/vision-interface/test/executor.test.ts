@@ -829,3 +829,67 @@ describe("vision.summarize（批量综合概述）", () => {
     expect(provider.lastInstruction).toBe("按顺序描述");
   });
 });
+
+describe("vision.observe / summarize profile 档位（v0.2.1）", () => {
+  const SUMMARY_ARGS = (sessionId: string, n: number, extra: Record<string, unknown> = {}) => ({
+    vision_session_id: sessionId,
+    image_inputs: Array.from({ length: n }, () => ({
+      type: "inline" as const,
+      inline: { mime_type: "image/png", blob: PNG_1PX },
+    })),
+    ...extra,
+  });
+
+  it("profile=deep：observe 使用深入指令包（水印/细小文字纳入，主观三档保留）", async () => {
+    const { executor, sessionId, provider } = await makeEnv({ verified: ["image_understanding"] });
+    const res = await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { profile: "deep" }));
+    expect(res.result.isError).toBe(false);
+    const ins = provider.lastInstruction ?? "";
+    expect(ins).toContain("深入观察");
+    expect(ins).toContain("水印");
+    expect(ins).toContain("细小文字与标识");
+    expect(ins).toContain("不得以“主观”为由拒绝回答");
+    expect(ins).toContain("不推断、不编造");
+  });
+
+  it("profile=deep：summarize 使用深入概述指令包（含水印比较语义）", async () => {
+    const { executor, sessionId, provider } = await makeEnv({ verified: ["image_understanding"] });
+    await call(executor, "vision.summarize", SUMMARY_ARGS(sessionId, 3, { profile: "deep" }));
+    const ins = provider.lastInstruction ?? "";
+    expect(ins).toContain("共 3 张");
+    expect(ins).toContain("水印、招牌、细小文字与标识的异同");
+  });
+
+  it("显式 instruction 优先于 profile=deep", async () => {
+    const { executor, sessionId, provider } = await makeEnv({ verified: ["image_understanding"] });
+    await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { profile: "deep", instruction: "只看主体" }));
+    expect(provider.lastInstruction).toBe("只看主体");
+  });
+
+  it("构造注入 defaultProfile=deep：不传 profile 也走深入档（部署基调）", async () => {
+    const provider = new MockProvider({ declared: DECLARED, verified: ["image_understanding"] });
+    const core = new VisionCore({
+      store: new InMemoryVisionStore(),
+      fetchBoundary: new FetchBoundary(),
+      providers: [provider],
+    });
+    core.capabilities.register(provider.declare());
+    core.capabilities.verify(await provider.probe());
+    const executor = new VisionExecutor(core, { defaultProfile: "deep" });
+    const created = await call(executor, "vision.session.create", {});
+    const sessionId = (created.result.structured as { vision_session_id: string }).vision_session_id;
+    await call(executor, "vision.observe", OBSERVE_ARGS(sessionId));
+    expect(provider.lastInstruction).toContain("深入观察");
+    // 显式 instruction 仍优先
+    await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { instruction: "x" }));
+    expect(provider.lastInstruction).toBe("x");
+  });
+
+  it("非法 profile 值 → VISION_INVALID_ARGS", async () => {
+    const { executor, sessionId } = await makeEnv({ verified: ["image_understanding"] });
+    const res = await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { profile: "expert" }));
+    expect(res.result.isError).toBe(true);
+    const e = res.result.structured as { error: { application_error_code: string } };
+    expect(e.error.application_error_code).toBe(ApplicationErrorCode.VISION_INVALID_ARGS);
+  });
+});
