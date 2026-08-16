@@ -30,6 +30,8 @@ class MockProvider implements VLMProvider {
   readonly adapterVersion = "0.1.0";
   readonly capabilityIds: CapabilityId[];
   calls = 0;
+  /** 最近一次 execute 收到的指令（断言默认指令/覆盖/Agent 指令用） */
+  lastInstruction?: string;
 
   constructor(
     private readonly opts: {
@@ -58,6 +60,7 @@ class MockProvider implements VLMProvider {
 
   async execute(req: ProviderExecuteRequest, signal: AbortSignal): Promise<ProviderExecuteResult> {
     this.calls += 1;
+    this.lastInstruction = req.instruction;
     if (this.opts.failWith) throw this.opts.failWith;
     if (this.opts.delayMs) {
       await new Promise((resolve) => setTimeout(resolve, this.opts.delayMs));
@@ -671,5 +674,46 @@ describe("operation.get / operation.cancel", () => {
     });
     expect(c2.result.isError).toBe(false);
     await p;
+  });
+});
+
+describe("vision.observe 默认指令（v0.1.3 校准）", () => {
+  it("未提供 instruction 时使用内置默认：聚焦主体、忽略水印、三档判断", async () => {
+    const { executor, sessionId, provider } = await makeEnv({ verified: ["image_understanding"] });
+    const res = await call(executor, "vision.observe", OBSERVE_ARGS(sessionId));
+    expect(res.result.isError).toBe(false);
+    const ins = provider.lastInstruction ?? "";
+    // 聚焦主体、水印默认不转录、客观特征必须描述、主观评价三档、不推断
+    expect(ins).toContain("水印与细小标识的文字转录");
+    expect(ins).toContain("主体是什么就描述什么");
+    expect(ins).toContain("穿着打扮");
+    expect(ins).toContain("默认不主动输出");
+    expect(ins).toContain("不得以“主观”为由拒绝回答");
+    expect(ins).toContain("不推断、不编造");
+    // 旧指令的"文本与几何模式"全要素要求已移除
+    expect(ins).not.toContain("文本与几何模式");
+  });
+
+  it("构造注入 defaultInstruction 覆盖内置默认（VISION_DEFAULT_INSTRUCTION 通路）", async () => {
+    const provider = new MockProvider({ declared: DECLARED, verified: ["image_understanding"] });
+    const core = new VisionCore({
+      store: new InMemoryVisionStore(),
+      fetchBoundary: new FetchBoundary(),
+      providers: [provider],
+    });
+    core.capabilities.register(provider.declare());
+    core.capabilities.verify(await provider.probe());
+    const executor = new VisionExecutor(core, { defaultInstruction: "只看主体，忽略一切细节" });
+    const created = await call(executor, "vision.session.create", {});
+    const sessionId = (created.result.structured as { vision_session_id: string }).vision_session_id;
+    const res = await call(executor, "vision.observe", OBSERVE_ARGS(sessionId));
+    expect(res.result.isError).toBe(false);
+    expect(provider.lastInstruction).toBe("只看主体，忽略一切细节");
+  });
+
+  it("Agent 显式提供的 instruction 始终优先于默认与注入", async () => {
+    const { executor, sessionId, provider } = await makeEnv({ verified: ["image_understanding"] });
+    await call(executor, "vision.observe", OBSERVE_ARGS(sessionId, { instruction: "Agent 自定义指令" }));
+    expect(provider.lastInstruction).toBe("Agent 自定义指令");
   });
 });

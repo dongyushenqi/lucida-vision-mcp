@@ -36,6 +36,8 @@ export interface ServerConfig {
   allowedUriSchemes: string[];
   /** 放行私有/环回地址（本地 HTTP serve 图片场景；默认 false，SSRF 防护保持开启） */
   allowPrivateAddresses: boolean;
+  /** 默认观察指令（Agent 未提供 instruction 时使用；缺省为内置校准版） */
+  defaultObserveInstruction?: string;
   /** Fetch Boundary 大小限制（字节） */
   maxInlineBytes: number;
   maxUriBytes: number;
@@ -67,9 +69,15 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
       .filter((s) => s.length > 0),
     allowedUriSchemes: parseSchemes(env["VISION_ALLOW_URI_SCHEMES"]),
     allowPrivateAddresses: env["VISION_ALLOW_PRIVATE_ADDRESSES"] === "true",
+    defaultObserveInstruction: trimToUndefined(env["VISION_DEFAULT_INSTRUCTION"]),
     maxInlineBytes: parsePositiveInt(env["VISION_MAX_INLINE_BYTES"], 10 * 1024 * 1024),
     maxUriBytes: parsePositiveInt(env["VISION_MAX_URI_BYTES"], 10 * 1024 * 1024),
   };
+}
+
+function trimToUndefined(raw: string | undefined): string | undefined {
+  const t = raw?.trim();
+  return t ? t : undefined;
 }
 
 /**

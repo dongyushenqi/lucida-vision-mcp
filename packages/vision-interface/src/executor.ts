@@ -46,10 +46,23 @@ import type { IdentityContext } from "./identity.js";
 import { parseVisionResourceUri } from "./resources.js";
 import { SessionSandbox } from "./session-sandbox.js";
 
-/** 中性感知指令（仅当 Agent 未提供 instruction 时使用；只请求可观察事实）。 */
+/**
+ * 默认观察指令（仅当 Agent 未提供 instruction 时使用；v0.1.3 校准版）：
+ * 聚焦图片主体；水印/细小标识默认不转录；客观特征必须如实描述；
+ * 主观评价默认不主动输出，用户明确要求时基于可观察特征按审美共识给出；
+ * 不推断、不编造。
+ */
 export const DEFAULT_OBSERVE_INSTRUCTION =
-  "描述这张图片中可观察到的视觉特征、对象类别、区域、文本与几何模式。" +
-  "只陈述可观察的视觉事实，不做诊断、因果归因或任何建议。";
+  "描述图片中所有可观察的客观特征，必须如实给出。主体是什么就描述什么：" +
+  "人物则描述动作、姿态与外观形态（如高矮胖瘦、胖瘦程度、匀称与否、穿着打扮等实际可见的特征）；" +
+  "风景则描述场景构成（地形、植被、建筑、光线、天气等可见要素）；" +
+  "物品则描述结构、材质与布局。" +
+  "一切可观察的形态、颜色、质感、比例都是事实；示例仅为示意，切勿局限于示例，也不得编造示例之外类别的特征。\n" +
+  "默认不输出：水印与细小标识的文字转录、无关背景细节。\n" +
+  "主观评价（美丑、性感、魅力等）因人而异，但存在多数人的审美共识：" +
+  "默认不主动输出；当用户明确要求时，基于可观察的客观特征给出评价，" +
+  "可参考普遍审美标准，并说明支撑评价的可见依据；分歧空间可如实提及，但不得以“主观”为由拒绝回答。\n" +
+  "不推断、不编造：观察不到的不虚构；不确定的明确标注不确定；职业、健康状况、拍摄意图等推断不得输出。";
 
 export interface ToolResult {
   isError: boolean;
@@ -88,6 +101,8 @@ interface VisualArgs {
 export class VisionExecutor {
   private readonly sandbox: SessionSandbox;
   private readonly defaultProviderId: string;
+  /** 默认观察指令（构造注入 > 内置默认；仅当 Agent 未提供 instruction 时使用） */
+  private readonly defaultInstruction: string;
   /** in-flight 取消映射（审查 #1）：operation_id → 执行中的 CancellationTokenSource */
   private readonly inflight = new Map<string, CancellationTokenSource>();
   /** 本请求结构化解析是否发生截断（膨胀防御，随 summary 输出后复位） */
@@ -95,9 +110,11 @@ export class VisionExecutor {
 
   constructor(
     private readonly core: VisionCore,
-    opts?: { defaultProviderId?: string },
+    opts?: { defaultProviderId?: string; defaultInstruction?: string },
   ) {
     this.sandbox = new SessionSandbox(core);
+    this.defaultProviderId = opts?.defaultProviderId ?? "agnes";
+    this.defaultInstruction = opts?.defaultInstruction ?? DEFAULT_OBSERVE_INSTRUCTION;
     const providers = core.providers.all();
     this.defaultProviderId = opts?.defaultProviderId ?? providers[0]?.providerId ?? "";
   }
@@ -456,7 +473,7 @@ export class VisionExecutor {
   private buildInstruction(kind: VisualKind, args: VisualArgs): string {
     switch (kind) {
       case "observe":
-        return args.instruction ?? DEFAULT_OBSERVE_INSTRUCTION;
+        return args.instruction ?? this.defaultInstruction;
       case "detect": {
         const labels = (args.labels ?? []).join("、");
         return (

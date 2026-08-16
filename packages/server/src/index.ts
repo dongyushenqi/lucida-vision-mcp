@@ -158,7 +158,9 @@ export async function createServer(config: ServerConfig) {
     );
   }
 
-  const executor = new VisionExecutor(core);
+  const executor = new VisionExecutor(core, {
+    defaultInstruction: config.defaultObserveInstruction,
+  });
   const legacy = new LegacyFamilyServer({
     executor,
     core,

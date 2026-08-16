@@ -50,9 +50,9 @@ export function createVisionTools(): ToolSpec[] {
     {
       name: "vision.observe",
       description:
-        "通用视觉观察：返回视觉证据 Observation（默认 label=visual_evidence 的证据文本；" +
-        "json_mode=true 且 Provider 已验证结构化输出时返回结构化观察）。" +
-        "只陈述可观察事实，绝无诊断或建议。",
+        "通用视觉观察：返回可观察的视觉事实（默认聚焦图片主体，不转录水印等细小文字）。" +
+        "默认不主动输出主观评价；用户明确要求时，基于可观察特征参考普遍审美标准给出，并说明依据。" +
+        "文字转录请用 vision.ocr。只陈述事实，不推断诊断。",
       inputSchema: ObserveArgs,
     },
     {

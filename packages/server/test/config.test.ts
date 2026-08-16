@@ -81,6 +81,12 @@ describe("Server 配置", () => {
     expect(loadConfig({ VISION_ALLOW_PRIVATE_ADDRESSES: "1" }).allowPrivateAddresses).toBe(false);
     expect(loadConfig({ VISION_ALLOW_PRIVATE_ADDRESSES: "yes" }).allowPrivateAddresses).toBe(false);
   });
+
+  it("默认观察指令：缺省为 undefined（用内置校准版）；可经 VISION_DEFAULT_INSTRUCTION 覆盖", () => {
+    expect(loadConfig({}).defaultObserveInstruction).toBeUndefined();
+    expect(loadConfig({ VISION_DEFAULT_INSTRUCTION: "只看主体" }).defaultObserveInstruction).toBe("只看主体");
+    expect(loadConfig({ VISION_DEFAULT_INSTRUCTION: "  " }).defaultObserveInstruction).toBeUndefined();
+  });
 });
 
 describe("VISION_PROVIDERS_JSON（多 Provider 装配）", () => {

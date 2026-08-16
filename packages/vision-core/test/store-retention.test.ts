@@ -32,10 +32,15 @@ const ART = (id: string, createdAt: string) => ({
 describe("retention 自动清理（规格二.3 Implementation Decision）", () => {
   it("过期 Operation/Artifact 被整条删除，新数据保留，身份字段不受影响", () => {
     const store = makeStore();
+    // 相对时间（此前硬编码 2026-08-15T00:00 会在日期越过保留窗口后变成"旧数据"，测试自爆）
+    const now = Date.now();
+    const HOUR = 3600_000;
+    const opNew = OP("op_new", new Date(now - HOUR).toISOString());
+    const artNew = ART("art_new", new Date(now - HOUR).toISOString());
     store.insertOperation(OP("op_old", "2026-01-01T00:00:00.000Z"));
-    store.insertOperation(OP("op_new", "2026-08-15T00:00:00.000Z"));
+    store.insertOperation(opNew);
     store.insertArtifact("vs_1", ART("art_old", "2026-01-01T00:00:00.000Z"), new Uint8Array([1, 2, 3, 4]));
-    store.insertArtifact("vs_1", ART("art_new", "2026-08-15T00:00:00.000Z"), new Uint8Array([5, 6, 7, 8]));
+    store.insertArtifact("vs_1", artNew, new Uint8Array([5, 6, 7, 8]));
 
     const removedOps = store.deleteOperationsOlderThan(7 * 24);
     const removedArts = store.deleteArtifactsOlderThan(24);
@@ -47,7 +52,7 @@ describe("retention 自动清理（规格二.3 Implementation Decision）", () =
     expect(store.getArtifact("art_old")).toBeUndefined();
     expect(store.getArtifact("art_new")).toBeDefined();
     // 被保留记录的字段未被触碰（身份不可变）
-    expect(store.getOperation("vs_1", "op_new")!.created_at).toBe("2026-08-15T00:00:00.000Z");
+    expect(store.getOperation("vs_1", "op_new")!.created_at).toBe(opNew.created_at);
     store.close();
   });
 
