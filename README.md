@@ -103,7 +103,7 @@ Non-OpenAI-compatible protocols (Anthropic / Gemini native APIs, etc.) need one 
 
 ## Capabilities and boundaries
 
-- **Ceiling = the attached model.** Under equal conditions it does not reach native-multimodal AI (GPT-4o / Claude) looking at the image directly; this system never embellishes.
+- **Ceiling = the attached model.** A model looking at an image directly is always at least as capable as the same model used through this server — we never embellish or enhance; we make seeing auditable, traceable, and honest.
 - **Never lies.** Capabilities open up only after probe verification; unverified ones are honestly reported as "not executable".
 - **Auditable.** Every observation records model, version, and timestamp — immutably.
 - **Positioning.** Lightweight production-grade for individuals and small teams (154 tests, 3-platform CI, error-code system, audit and security boundaries); enterprise features (multi-tenant, rate limiting, distributed deployment) are out of scope.
@@ -242,7 +242,7 @@ MIT
 
 ## 能力与边界
 
-- **上限 = 所接模型**。同等条件下，达不到 GPT-4o / Claude 原生多模态直接看图的水平；本系统不"加戏"。
+- **上限 = 所接模型**。同一个模型直接看图的能力，永远不低于「模型 + 本系统」的组合——本系统不"加戏"、不"变强"，只是让"看"可审计、可溯源、不撒谎。
 - **不撒谎**。能力先经探针实测再开放；未验证的能力一律如实报"不可执行"。
 - **可审计**。每次观察记录模型、版本与时间戳，不可篡改。
 - **定位**。个人与小团队可直接使用的轻量生产级（154 个测试、三平台 CI、错误码体系、审计与安全边界）；不含多租户、限流、分布式等企业能力。
